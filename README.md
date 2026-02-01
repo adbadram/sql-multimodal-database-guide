@@ -1,162 +1,309 @@
-# The Multimodal Database Revolution: A Deep Technical Exploration
+# Microsoft SQL Server: The Multimodal Database Deep Dive
 
-*By the dawn of 2026, the database industry has witnessed a seismic shift. PostgreSQL dominates mindshare with $1.25B in acquisitions (Neon to Databricks, CrunchyData to Snowflake). Yet beneath this excitement lies a more fundamental transformation: the emergence of true multimodal databases. This isn't about bolting features together—it's about rethinking how data systems work.*
-
----
-
-## The Problem With Single-Model Thinking
-
-For decades, we've lived in a world of database specialization:
-
-| Data Model | Traditional System | Optimization Target |
-|-----------|-------------------|---------------------|
-| Relational | PostgreSQL, MySQL, SQL Server | ACID transactions |
-| Document | MongoDB, CouchDB | Schema flexibility |
-| Graph | Neo4j, Neptune | Relationship traversal |
-| Vector | Pinecone, Milvus | Similarity search |
-| Analytical | ClickHouse, Snowflake | Aggregate queries |
-
-**The assumption was simple**: pick the right tool for the job. But modern applications don't have *one* job.
-
-### A Real-World Scenario
-
-Consider an e-commerce fraud detection system. In a single request, it must:
-
-1. **Query relational data**: Check the customer's order history (transactions)
-2. **Parse JSON payloads**: Analyze the device fingerprint embedded in the request
-3. **Traverse a graph**: Map relationships between this user and known fraud rings
-4. **Perform vector search**: Find semantically similar fraud patterns
-5. **Run analytics**: Compare this transaction against statistical baselines
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Single Fraud Detection Request               │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │Relational│→→│  JSON    │→→│  Graph   │→→│  Vector  │→→ ✓/✗  │
-│  │  Query   │  │  Parse   │  │ Traverse │  │  Search  │        │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘        │
-│       ↓              ↓             ↓             ↓              │
-│   [Customer]    [Device]      [Network]    [Patterns]          │
-│   [History ]    [Context]     [Analysis]   [Matching]          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-In the polyglot persistence model, this requires:
-- 4+ different databases
-- Multiple network round-trips
-- Complex orchestration logic
-- Separate security models
-- No transactional guarantees across the operation
-
-**The latency cost alone is devastating.** Each database hop adds 1-5ms network latency. A 4-system query chain with 3ms average latency costs 12ms just in network overhead—before any actual computation.
+> *A comprehensive guide to JSON, Graph, Vector, and HTAP capabilities in a unified platform*
 
 ---
 
-## What Defines a True Multimodal Database?
-
-Not every database claiming multimodal support actually delivers it. Here's the litmus test:
-
-### Three Pillars of Multimodality
-
-```
-            ┌────────────────────────────────────────┐
-            │        TRUE MULTIMODAL DATABASE        │
-            ├────────────────────────────────────────┤
-            │                                        │
-            │  ┌────────────────────────────────┐   │
-            │  │    1. FIRST-CLASS SUPPORT      │   │
-            │  │    Multiple data models with   │   │
-            │  │    native query semantics      │   │
-            │  └────────────────────────────────┘   │
-            │                 ↓                     │
-            │  ┌────────────────────────────────┐   │
-            │  │    2. UNIFIED GOVERNANCE       │   │
-            │  │    Single security, backup,    │   │
-            │  │    HA, and compliance model    │   │
-            │  └────────────────────────────────┘   │
-            │                 ↓                     │
-            │  ┌────────────────────────────────┐   │
-            │  │   3. INTEGRATED PRIMITIVES     │   │
-            │  │   Shared optimizer, storage,   │   │
-            │  │   indexing across all models   │   │
-            │  └────────────────────────────────┘   │
-            │                                        │
-            └────────────────────────────────────────┘
-```
-
-Let's prove each pillar with concrete examples.
+## Table of Contents
+1. [The Convergence](#the-convergence)
+2. [What Does "Multimodal" Actually Mean?](#what-does-multimodal-actually-mean)
+3. [Pillar 1: Native Multi-Model Query Processing](#pillar-1-native-multi-model-query-processing)
+4. [JSON Operations: Beyond Simple Storage](#json-operations-beyond-simple-storage)
+5. [Graph Queries: Relationship-Aware Operations](#graph-queries-relationship-aware-operations)
+6. [Vector Search: Semantic Intelligence](#vector-search-semantic-intelligence)
+7. [HTAP: Transactions and Analytics, Together](#htap-transactions-and-analytics-together)
+8. [Pillar 2: Unified Governance](#pillar-2-unified-governance)
+9. [Pillar 3: Integrated Performance Primitives](#pillar-3-integrated-performance-primitives)
+10. [The Microsoft Fabric Integration Story](#the-microsoft-fabric-integration-story)
+11. [Economics: Starting at $0](#economics-starting-at-0)
+12. [The Agent-Ready Database](#the-agent-ready-database)
+13. [Real-World Architecture: E-Commerce Platform](#real-world-architecture-e-commerce-platform)
+14. [Get Started FREE Today!](#-get-started-free-today)
 
 ---
 
-## Pillar 1: First-Class Multi-Model Support
+## The Convergence
 
-### Relational Foundation: The ACID Guarantee
+Something fundamental has shifted in how we build data systems.
 
-Every multimodal operation must respect transactional semantics. Here's how SQL Server handles this:
+For the past decade, the industry mantra was "use the right tool for the job"—which translated to running PostgreSQL for transactions, MongoDB for documents, Neo4j for graphs, Pinecone for vectors, and Snowflake for analytics. Each database optimized for its specialty, connected by an increasingly complex web of ETL pipelines, sync jobs, and integration middleware.
+
+**Microsoft SQL Server has emerged as a true multimodal database**, not by acquiring other systems, but by building native capabilities directly into its query engine. This isn't a marketing rebrand—it represents a fundamental architectural shift where JSON, graph, vector, and analytical operations share the same transaction log, the same optimizer, and the same security model.
+
+Andy Pavlo's 2025 database retrospective captured this moment: the convergence of OLTP and OLAP capabilities, the rise of vector search as a first-class primitive, and the growing importance of unified governance. SQL Server embodies this convergence.
+
+This guide dives deep into what multimodality actually means, how it changes your architecture decisions, and why consolidation is winning against the polyglot approach.
+
+---
+
+## What Does "Multimodal" Actually Mean?
+
+Let's be precise. A multimodal database isn't just a database that stores different types of data. Any database can store a JSON string or a binary vector. The distinction lies in **query-time integration**:
+
+| Capability | Single-Purpose System | Multimodal (SQL Server) |
+|-----------|---------|-------------------------|
+| JSON Path Query | Stored as text, parsed at app layer | `JSON_VALUE()`, `OPENJSON()` in query optimizer |
+| Graph Traversal | Separate Cypher query | `MATCH` clause in T-SQL |
+| Vector Similarity | External API call | `VECTOR_DISTANCE()` in query plan |
+| Analytical Aggregation | ETL to data warehouse | Columnstore indexes, same tables |
+
+The critical insight: **all four query patterns can participate in a single execution plan**, sharing joins, filters, and aggregations without data movement.
+
+---
+
+## The Three Pillars of Multimodality
+
+Microsoft's approach rests on three architectural pillars:
+
+### Pillar 1: Native Multi-Model Query Processing
+
+Every data model—relational, document, graph, vector—flows through the same query optimizer. This means:
 
 ```sql
--- Begin a transaction spanning multiple data models
-BEGIN TRANSACTION;
-
--- 1. Relational: Update customer record
-UPDATE Customers 
-SET LastActivity = GETUTCDATE() 
-WHERE CustomerID = 12345;
-
--- 2. JSON: Log device context (schema-flexible)
-INSERT INTO DeviceEvents (CustomerID, EventData)
-VALUES (12345, N'{
-    "deviceId": "abc-123",
-    "fingerprint": {
-        "browser": "Chrome/120",
-        "os": "Windows 11",
-        "screen": "1920x1080"
-    },
-    "geoLocation": {
-        "country": "US",
-        "city": "Seattle"
-    }
-}');
-
--- 3. Graph: Create relationship edge
-INSERT INTO FraudNetwork.$edge_table (fromNode, toNode, confidence)
-SELECT c.$node_id, d.$node_id, 0.85
-FROM Customers c, Devices d
-WHERE c.CustomerID = 12345 AND d.DeviceID = 'abc-123';
-
--- 4. If anything fails, everything rolls back
-COMMIT TRANSACTION;
+-- This query uses FOUR different data models in ONE statement
+SELECT 
+    c.CustomerName,                                          -- Relational
+    JSON_VALUE(c.Preferences, '$.theme') AS Theme,          -- JSON
+    (SELECT COUNT(*) FROM CustomerNetwork cn 
+     WHERE MATCH(c-(cn)->c2)) AS ConnectionCount,           -- Graph
+    VECTOR_DISTANCE('cosine', p.Embedding, @search) AS Sim  -- Vector
+FROM Customers c
+JOIN Products p ON c.LastViewedProduct = p.ProductID
+ORDER BY Sim;
 ```
 
-**Why This Matters**: In a polyglot system, if the graph insert fails after the JSON insert succeeds, you have data inconsistency. Here, it's all-or-nothing.
+**One query. One transaction. One execution plan.**
 
-### JSON as a First-Class Citizen
+### Pillar 2: Unified Governance
 
-SQL Server doesn't treat JSON as an opaque blob. It provides **projection-based querying** that exposes JSON as relational rowsets:
+Every data model shares:
+- The same role-based access control
+- The same row-level security policies
+- The same encryption (TDE, Always Encrypted)
+- The same audit logging
+- The same backup and recovery
+
+This isn't just convenience—it's **compliance**. GDPR, HIPAA, SOC2 audits become dramatically simpler when you have one security surface instead of five.
+
+### Pillar 3: Integrated Performance Primitives
+
+The same buffer pool, the same I/O scheduler, the same memory management. When you index a JSON path or a vector column, those indexes participate in the same cost-based optimizer that's been refined over decades.
+
+---
+
+## Pillar 1: Native Multi-Model Query Processing
+
+Let's explore each data model with real, executable examples.
+
+---
+
+## JSON Operations: Beyond Simple Storage
+
+### The Basics: Extraction and Navigation
 
 ```sql
--- Sample: Analyzing device fingerprints from JSON events
-DECLARE @events TABLE (
-    EventID INT IDENTITY,
-    EventData NVARCHAR(MAX)
+-- Create a table with JSON data
+CREATE TABLE Events (
+    EventID INT IDENTITY PRIMARY KEY,
+    EventTimestamp DATETIME2 DEFAULT SYSUTCDATETIME(),
+    Data NVARCHAR(MAX) CHECK (ISJSON(Data) = 1)
 );
 
-INSERT INTO @events (EventData) VALUES 
-(N'{"deviceId":"d1","fingerprint":{"browser":"Chrome","os":"Windows"}}'),
-(N'{"deviceId":"d2","fingerprint":{"browser":"Firefox","os":"macOS"}}'),
-(N'{"deviceId":"d3","fingerprint":{"browser":"Chrome","os":"Linux"}}');
+-- Insert diverse JSON structures
+INSERT INTO Events (Data) VALUES
+(N'{"type":"click","page":"/products","userId":12345,"metadata":{"browser":"Chrome","os":"Windows"}}'),
+(N'{"type":"purchase","orderId":"ORD-789","items":[{"sku":"ABC","qty":2},{"sku":"DEF","qty":1}]}'),
+(N'{"type":"error","code":500,"message":"Internal server error","stack":"..."}');
+```
 
--- OPENJSON transforms JSON into queryable rows
+```sql
+-- Extract scalar values with JSON_VALUE
+SELECT 
+    EventID,
+    JSON_VALUE(Data, '$.type') AS EventType,
+    JSON_VALUE(Data, '$.userId') AS UserID,
+    JSON_VALUE(Data, '$.metadata.browser') AS Browser
+FROM Events
+WHERE JSON_VALUE(Data, '$.type') = 'click';
+```
+
+**Result:**
+```
+EventID | EventType | UserID | Browser
+--------|-----------|--------|--------
+1       | click     | 12345  | Chrome
+```
+
+### Deep Navigation: Arrays and Nested Objects
+
+```sql
+-- Expand arrays with OPENJSON
 SELECT 
     e.EventID,
+    JSON_VALUE(e.Data, '$.orderId') AS OrderID,
+    items.sku,
+    items.qty,
+    items.qty * 29.99 AS LineTotal  -- Mix JSON with calculations
+FROM Events e
+CROSS APPLY OPENJSON(e.Data, '$.items')
+    WITH (
+        sku NVARCHAR(50) '$.sku',
+        qty INT '$.qty'
+    ) AS items
+WHERE JSON_VALUE(e.Data, '$.type') = 'purchase';
+```
+
+**Result:**
+```
+EventID | OrderID | sku | qty | LineTotal
+--------|---------|-----|-----|----------
+2       | ORD-789 | ABC | 2   | 59.98
+2       | ORD-789 | DEF | 1   | 29.99
+```
+
+### Advanced: JSON in Joins and Aggregations
+
+Here's where multimodality shines—JSON participating in relational operations:
+
+```sql
+-- Join JSON data with relational tables
+SELECT 
+    p.ProductName,
+    COUNT(*) AS ClickCount,
+    AVG(CAST(JSON_VALUE(e.Data, '$.sessionDuration') AS FLOAT)) AS AvgSessionDuration
+FROM Events e
+JOIN Products p ON JSON_VALUE(e.Data, '$.productId') = CAST(p.ProductID AS NVARCHAR)
+WHERE JSON_VALUE(e.Data, '$.type') = 'product_view'
+GROUP BY p.ProductName
+ORDER BY ClickCount DESC;
+```
+
+### Window Functions Over JSON
+
+```sql
+-- Sessionize clickstream data using JSON fields
+SELECT 
+    JSON_VALUE(Data, '$.deviceId') AS DeviceID,
+    EventTimestamp,
+    JSON_VALUE(Data, '$.page') AS Page,
+    SUM(CASE WHEN gap > 30 THEN 1 ELSE 0 END) OVER (
+        PARTITION BY JSON_VALUE(Data, '$.deviceId') 
+        ORDER BY EventTimestamp
+    ) AS SessionNumber
+FROM (
+    SELECT 
+        Data,
+        EventTimestamp,
+        DATEDIFF(MINUTE, 
+            LAG(EventTimestamp) OVER (
+                PARTITION BY JSON_VALUE(Data, '$.deviceId') 
+                ORDER BY EventTimestamp
+            ), 
+            EventTimestamp
+        ) AS gap
+    FROM Events
+    WHERE JSON_VALUE(Data, '$.type') = 'pageview'
+) sub;
+```
+
+### JSON Modification: In-Place Updates
+
+```sql
+-- Update nested JSON without full replacement
+UPDATE Events
+SET Data = JSON_MODIFY(
+    JSON_MODIFY(Data, '$.processed', 'true'),
+    '$.processedAt', 
+    FORMAT(SYSUTCDATETIME(), 'yyyy-MM-ddTHH:mm:ssZ')
+)
+WHERE EventID = 1;
+
+-- Add to arrays
+UPDATE Events
+SET Data = JSON_MODIFY(
+    Data, 
+    'append $.items', 
+    JSON_QUERY('{"sku":"GHI","qty":3}')
+)
+WHERE JSON_VALUE(Data, '$.orderId') = 'ORD-789';
+```
+
+### Real-World Pattern: Flexible Event Schema with Computed Columns
+
+```sql
+-- Create table with indexed JSON paths
+CREATE TABLE CustomerEvents (
+    EventID BIGINT IDENTITY PRIMARY KEY,
+    CustomerID INT NOT NULL,
+    Data NVARCHAR(MAX) CHECK (ISJSON(Data) = 1),
+    
+    -- Computed columns for frequently queried JSON paths
+    EventType AS JSON_VALUE(Data, '$.type') PERSISTED,
+    EventCategory AS JSON_VALUE(Data, '$.category') PERSISTED,
+    
+    -- Include timestamp for partitioning
+    EventTimestamp DATETIME2 DEFAULT SYSUTCDATETIME()
+);
+
+-- Now you can index the JSON paths
+CREATE INDEX IX_CustomerEvents_Type ON CustomerEvents(EventType, EventTimestamp);
+CREATE INDEX IX_CustomerEvents_Category ON CustomerEvents(EventCategory);
+
+-- Queries automatically use these indexes
+SELECT * FROM CustomerEvents 
+WHERE EventType = 'purchase' 
+AND EventTimestamp > DATEADD(DAY, -7, GETUTCDATE());
+```
+
+### Performance Pattern: JSON Path Indexes via Computed Columns
+
+```sql
+-- For complex JSON structures, create targeted computed columns
+ALTER TABLE Events ADD 
+    DeviceFingerprint AS JSON_VALUE(Data, '$.fingerprint.deviceId') PERSISTED,
+    GeoCountry AS JSON_VALUE(Data, '$.geo.country') PERSISTED;
+
+-- Create covering index for common query pattern
+CREATE INDEX IX_Events_Geo 
+ON Events(GeoCountry, DeviceFingerprint) 
+INCLUDE (EventTimestamp, Data);
+```
+
+### JSON + Relational + Window Functions: Analytics Example
+
+```sql
+-- Complex analytics mixing JSON extraction with window functions
+WITH EventsExpanded AS (
+    SELECT
+        EventID,
+        JSON_VALUE(Data, '$.deviceId') AS DeviceId,
+        JSON_VALUE(Data, '$.fingerprint.browser') AS Browser,
+        JSON_VALUE(Data, '$.fingerprint.os') AS OS,
+        EventTimestamp
+    FROM Events
+    WHERE JSON_VALUE(Data, '$.type') = 'session_start'
+)
+SELECT 
+    DeviceId,
+    Browser,
+    OS,
+    COUNT(*) OVER (PARTITION BY Browser) AS BrowserCount,
+    ROW_NUMBER() OVER (PARTITION BY OS ORDER BY EventTimestamp DESC) AS OSRank
+FROM EventsExpanded;
+```
+
+### Using OPENJSON with explicit schema
+
+```sql
+-- More controlled extraction with explicit types
+SELECT 
+    j.EventID,
     j.deviceId,
     j.browser,
     j.os,
-    -- Analytical: Count browsers in same query
     COUNT(*) OVER (PARTITION BY j.browser) as BrowserCount
-FROM @events e
-CROSS APPLY OPENJSON(e.EventData) 
+FROM Events e
+CROSS APPLY OPENJSON(e.Data)
 WITH (
     deviceId NVARCHAR(50) '$.deviceId',
     browser NVARCHAR(50) '$.fingerprint.browser',
@@ -181,15 +328,15 @@ One of JSON's killer features is schema flexibility. Watch how we can evolve sch
 
 ```sql
 -- Week 1: Original schema
-INSERT INTO Events (Data) VALUES 
+INSERT INTO Events (Data) VALUES
 (N'{"version":1,"action":"click","target":"button"}');
 
 -- Week 2: Added nested analytics (backward compatible)
-INSERT INTO Events (Data) VALUES 
+INSERT INTO Events (Data) VALUES
 (N'{"version":2,"action":"click","target":"button","analytics":{"duration":1.5}}');
 
 -- Query works on BOTH versions
-SELECT 
+SELECT
     JSON_VALUE(Data, '$.action') as Action,
     JSON_VALUE(Data, '$.target') as Target,
     -- Returns NULL for v1 events (graceful degradation)
@@ -243,12 +390,12 @@ CREATE TABLE InvolvedIn AS EDGE;     -- Person INVOLVED IN Transaction
 ```sql
 -- Find fraud rings: People connected through suspicious transaction patterns
 -- Pattern: Person → Account → (sent money to) → Account → Person
-SELECT 
+SELECT
     p1.Name AS Sender,
     p2.Name AS Receiver,
     STRING_AGG(CAST(t.Amount AS VARCHAR), ', ') AS TransactionAmounts,
     COUNT(*) AS ConnectionStrength
-FROM 
+FROM
     Person p1,
     Owns o1,
     Account a1,
@@ -289,9 +436,9 @@ ORDER BY ConnectionStrength DESC;
 Here's where multimodality shines—combining all three in a single operation:
 
 ```sql
--- Find suspicious activity combining graph relationships, 
+-- Find suspicious activity combining graph relationships,
 -- relational data, and JSON device fingerprints
-SELECT 
+SELECT
     p.Name,
     p.RiskScore,
     -- JSON: Extract device info
@@ -305,9 +452,9 @@ SELECT
     ) AS FraudConnections,
     -- Relational: Recent transaction total
     (
-        SELECT SUM(Amount) 
-        FROM Transactions t 
-        WHERE t.PersonID = p.PersonID 
+        SELECT SUM(Amount)
+        FROM Transactions t
+        WHERE t.PersonID = p.PersonID
         AND t.Timestamp > DATEADD(DAY, -7, GETUTCDATE())
     ) AS WeeklyVolume
 FROM Person p
@@ -339,7 +486,7 @@ CREATE TABLE Products (
 -- Insert with pre-computed embeddings
 INSERT INTO Products (ProductID, Name, Description, DescriptionEmbedding)
 VALUES (
-    1, 
+    1,
     'Ergonomic Office Chair',
     'Premium mesh back chair with lumbar support and adjustable armrests',
     -- Embedding vector from your ML pipeline
@@ -458,7 +605,7 @@ Query: SELECT SUM(Qty) → Must read ALL columns for ALL rows
 │   SaleID    │ │  ProductID  │ │   Quantity  │ ← Read ONLY needed column
 │ [1,2,3,...] │ │ [A,B,C,...] │ │ [10,5,8,...] │
 └─────────────┘ └─────────────┘ └─────────────┘
-Query: SELECT SUM(Qty) → Read only Quantity column, 
+Query: SELECT SUM(Qty) → Read only Quantity column,
                          highly compressed, batch processing
 ```
 
@@ -543,8 +690,8 @@ Polyglot Security Nightmare:
 │  Encryption:✓│  Encryption:✓│ Encryption:✓│ Encryption:?│Encryption│
 │  Audit:✓     │  Audit:✓   │  Audit:~   │  Audit:✗   │  Audit:✓  │
 └─────────────────────────────────────────────────────────────────┘
-           ↑          ↑           ↑           ↑           ↑
-           └──────────┴───────────┴───────────┴───────────┘
+     ↑          ↑           ↑           ↑           ↑
+           └───────────┴───────────┴───────────┴───────────┘
                    5 different auth systems to manage
                    5 different compliance audits
                    5 different attack surfaces
@@ -579,7 +726,7 @@ ON dbo.Customers,
 ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID)
 ON dbo.Events,        -- JSON data
 ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID)
-ON dbo.Relationships, -- Graph edges  
+ON dbo.Relationships, -- Graph edges
 ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID)
 ON dbo.Embeddings     -- Vector data
 WITH (STATE = ON);
@@ -587,7 +734,7 @@ WITH (STATE = ON);
 -- Every query, regardless of data model, is filtered
 -- User from TenantA sees ONLY TenantA data
 SELECT * FROM Customers;           -- Filtered
-SELECT * FROM Events;              -- Filtered  
+SELECT * FROM Events;              -- Filtered
 SELECT * FROM Relationships;       -- Filtered
 SELECT * FROM Embeddings;          -- Filtered
 ```
@@ -664,7 +811,7 @@ CREATE INDEX IX_Events_Category ON Events(EventCategory);
 
 -- Index on graph edge properties
 CREATE INDEX IX_Network_Strength 
-ON CustomerNetwork(RelationshipStrength)
+ON CustomerNetwork(RelationshipStrength) 
 INCLUDE (SourceCustomerID, TargetCustomerID);
 
 -- Vector index for similarity search
@@ -691,15 +838,15 @@ As Andy Pavlo noted in his 2025 retrospective, the database landscape is converg
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Microsoft Fabric Ecosystem                   │
 │                                                                 │
-│  ┌───────────────────┐         ┌────────────────────────────┐ │
+│  ┌───────────────────┐         ┌──────────────────────────────┐ │
 │  │   Azure SQL DB    │ Mirror  │        OneLake             │ │
-│  │  (Operational)    │───────▶│   (Analytical Lake)         │ │
+│  │  (Operational)    │────────▶│   (Analytical Lake)         │ │
 │  │                   │        │                              │ │
 │  │ • OLTP Workloads  │        │ • Power BI                  │ │
 │  │ • JSON/Graph/Vec  │        │ • Synapse Analytics         │ │
 │  │ • Real-time Apps  │        │ • Machine Learning          │ │
 │  │                   │        │ • Large-scale AI            │ │
-│  └───────────────────┘        └────────────────────────────┘ │
+│  └───────────────────┘        └──────────────────────────────┘ │
 │           ↑                              ↑                    │
 │           └──────────────────────────────┘                    │
 │              Single Governance Model                          │
@@ -734,13 +881,13 @@ The multimodal approach dramatically changes database economics:
 
 ### Traditional Polyglot Cost Structure
 
-| Component | Service | Monthly Cost |
+| Component | Separate Services | Monthly Cost |
 |-----------|---------|-------------|
-| Relational | RDS PostgreSQL | $500 |
-| Document | MongoDB Atlas | $300 |
-| Graph | Neo4j AuraDB | $400 |
-| Vector | Pinecone | $200 |
-| Analytics | Snowflake | $800 |
+| Relational | Cloud RDBMS | $500 |
+| Document | Document DBaaS | $300 |
+| Graph | Graph DBaaS | $400 |
+| Vector | Vector DBaaS | $200 |
+| Analytics | Data Warehouse | $800 |
 | **Total** | | **$2,200/month** |
 
 *Plus: Integration maintenance, security overhead, operational complexity*
@@ -765,7 +912,38 @@ The multimodal approach dramatically changes database economics:
 
 ## The Agent-Ready Database
 
-As Pavlo highlighted, 2025 was the year of MCP (Model Context Protocol) adoption. Every database vendor rushed to support AI agents. But there's a critical insight: **agents work best with unified data access**.
+2025 was the year of MCP (Model Context Protocol) adoption. Every database vendor rushed to support AI agents. But there's a critical insight: **agents work best with unified data access**.
+
+### Data API Builder (DAB): Your Gateway to MCP, REST, and GraphQL
+
+Microsoft's **[Data API Builder (DAB)](https://learn.microsoft.com/azure/data-api-builder/)** is the key enabler for modern API access to SQL Server. DAB automatically generates:
+
+- **MCP Server** - AI agents can interact with your database using Model Context Protocol
+- **REST APIs** - Full CRUD operations with filtering, pagination, and relationships
+- **GraphQL APIs** - Flexible queries with automatic schema generation
+
+```yaml
+# dab-config.json - One config, three API paradigms
+{
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('SQL_CONNECTION_STRING')"
+  },
+  "entities": {
+    "Customer": {
+      "source": "dbo.Customers",
+      "rest": { "enabled": true },
+      "graphql": { "enabled": true, "type": { "singular": "Customer", "plural": "Customers" } },
+      "permissions": [{ "role": "anonymous", "actions": ["read"] }]
+    }
+  }
+}
+```
+
+With DAB, your multimodal SQL Server database instantly becomes accessible to:
+- **AI Agents** via MCP (Claude, ChatGPT, custom agents)
+- **Web/Mobile Apps** via REST or GraphQL
+- **Low-code Platforms** via standard APIs
 
 ### Why Multimodality Matters for AI
 
@@ -774,26 +952,27 @@ Consider an AI agent tasked with customer support:
 **Polyglot Agent Workflow:**
 ```
 Agent: "I need to help this customer"
-  → Query PostgreSQL for customer info
-  → Query MongoDB for interaction history (JSON)
-  → Query Neo4j for related customers (graph)
-  → Query Pinecone for similar past tickets (vector)
-  → Query Snowflake for aggregate patterns (analytics)
-  
+  → Query separate RDBMS for customer info
+  → Query document store for interaction history (JSON)
+  → Query graph database for related customers
+  → Query vector database for similar past tickets
+  → Query data warehouse for aggregate patterns
+
   5 API calls, 5 auth contexts, 5 failure modes
   Latency: 200-500ms
 ```
 
-**Multimodal Agent Workflow:**
+**Multimodal Agent Workflow (SQL Server + DAB):**
 ```
 Agent: "I need to help this customer"
-  → Single SQL Server query combining all models
-  
+  → Single MCP call to SQL Server via DAB
+  → DAB routes to unified multimodal query
+
   1 API call, 1 auth context, 1 failure mode
   Latency: 10-50ms
 ```
 
-### MCP + SQL Server Example
+### MCP + DAB + SQL Server Example
 
 ```sql
 -- Single MCP tool call retrieves comprehensive context
@@ -802,7 +981,7 @@ CREATE PROCEDURE mcp_GetCustomerContext
     @query NVARCHAR(MAX) = NULL
 AS
 BEGIN
-    SELECT 
+    SELECT
         -- Relational: Core customer data
         c.Name,
         c.Email,
@@ -811,7 +990,7 @@ BEGIN
         
         -- JSON: Recent interactions
         (
-            SELECT TOP 5 
+            SELECT TOP 5
                 JSON_VALUE(i.Data, '$.channel') as Channel,
                 JSON_VALUE(i.Data, '$.sentiment') as Sentiment,
                 i.Timestamp
@@ -860,7 +1039,7 @@ Let's design a complete system using multimodal capabilities:
 ┌─────────────────────────────────────────────────────────────────┐
 │                    E-Commerce Platform                          │
 │                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
+│  ┌───────────────────────────────────────────────────────────┐   │
 │  │                   Azure SQL Database                     │   │
 │  │                   (Multimodal Core)                      │   │
 │  │                                                         │   │
@@ -881,18 +1060,18 @@ Let's design a complete system using multimodal capabilities:
 │  │  │ • Similar   │ │ • Inventory Forecasting        │  │   │
 │  │  │   Items     │ │ • Customer Segmentation        │  │   │
 │  │  └─────────────┘ └─────────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  └───────────────────────────────────────────────────────────┘   │
 │                              │                                  │
 │                    ┌─────────┴─────────┐                       │
 │                    │ Fabric Mirroring  │                       │
 │                    └─────────┬─────────┘                       │
 │                              │                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
+│  ┌───────────────────────────────────────────────────────────┐   │
 │  │                    OneLake                              │   │
 │  │  • Power BI Dashboards                                  │   │
 │  │  • ML Model Training                                    │   │
 │  │  • Advanced Analytics                                   │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  └───────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -957,9 +1136,9 @@ BEGIN
         p.Name,
         JSON_VALUE(p.Specs, '$.shortDescription') AS Description,
         p.Price,
-        COALESCE(cp.GraphScore, 0) +
-        COALESCE(vs.VectorScore, 0) +
-        COALESCE(a.TrendScore, 0) +
+        COALESCE(cp.GraphScore, 0) + 
+        COALESCE(vs.VectorScore, 0) + 
+        COALESCE(a.TrendScore, 0) + 
         COALESCE(fbt.CooccurrenceScore, 0) AS TotalScore
     FROM Products p
     LEFT JOIN CustomerProfile cp ON p.ProductID = cp.ProductID
@@ -982,24 +1161,98 @@ END;
 
 ---
 
-## Conclusion: The Database Landscape in 2026
+## Conclusion: Why Microsoft SQL Server for Multimodal
 
-As we look at the 2025 database retrospective, several truths emerge:
+The database landscape is converging, and Microsoft SQL Server is leading that convergence:
 
-1. **PostgreSQL dominates mindshare** — but Microsoft SQL Server delivers multimodality today
-2. **Specialization is fragmenting** — while convergence is strengthening
-3. **AI demands unified data access** — polyglot is the anti-pattern for agents
-4. **Economics favor consolidation** — complexity has compounding costs
+1. **True multimodality** — Not features bolted on, but integrated at the engine level
+2. **Unified governance** — One security model, one backup, one compliance surface
+3. **AI-ready architecture** — DAB enables MCP, REST, and GraphQL instantly
+4. **Economics that make sense** — Start free, scale as needed
 
-Microsoft SQL is not just a relational database with features bolted on. It's a fundamentally different architecture:
+Microsoft SQL is not just a relational database with features added. It's a fundamentally different architecture:
 
 - **JSON is queryable**, not just stored
 - **Graphs are first-class**, not middleware
 - **Vectors are indexed**, not external
 - **Analytics are real-time**, not batch
 - **Governance is unified**, not fragmented
+- **APIs are automatic** via Data API Builder
 
 The multimodal database isn't a future roadmap. **It's the default operating model today.**
+
+---
+
+## 🚀 Get Started FREE Today!
+
+You can try everything in this guide **completely free**. No credit card required.
+
+### Option 1: SQL Server Express (On-Premises)
+
+**[Download SQL Server 2022 Express](https://www.microsoft.com/sql-server/sql-server-downloads)** — Free forever, full multimodal capabilities:
+
+- ✅ JSON support (OPENJSON, JSON_VALUE, FOR JSON)
+- ✅ Graph tables and MATCH queries
+- ✅ Columnstore indexes for analytics
+- ✅ Up to 10GB per database
+- ✅ Perfect for development and small production workloads
+
+```powershell
+# Quick install via winget
+winget install Microsoft.SQLServer.2022.Express
+```
+
+### Option 2: Azure SQL Database Free Offer
+
+**[Try Azure SQL Database Free](https://azure.microsoft.com/free/sql-database/)** — 100,000 vCore seconds/month free:
+
+- ✅ Full cloud-managed experience
+- ✅ All multimodal features
+- ✅ Automatic backups and HA
+- ✅ Fabric mirroring ready
+- ✅ No commitment, cancel anytime
+
+### Option 3: Azure SQL Database Free Tier (Always Free)
+
+**[Azure SQL Database Free Tier](https://learn.microsoft.com/azure/azure-sql/database/free-offer)** — Permanently free tier:
+
+- ✅ 32GB storage
+- ✅ 100,000 vCore seconds/month
+- ✅ Perfect for learning and small apps
+
+### Data API Builder (DAB) — Free & Open Source
+
+**[Get Data API Builder](https://github.com/Azure/data-api-builder)** — Instant REST, GraphQL, and MCP:
+
+```bash
+# Install DAB CLI
+dotnet tool install -g Microsoft.DataApiBuilder
+
+# Initialize with your database
+dab init --database-type mssql --connection-string "YOUR_CONNECTION_STRING"
+
+# Add an entity
+dab add Customer --source dbo.Customers --permissions "anonymous:read"
+
+# Start the API server
+dab start
+```
+
+In 60 seconds, you have:
+- REST API at `http://localhost:5000/api/Customer`
+- GraphQL at `http://localhost:5000/graphql`
+- MCP server for AI agents
+
+### Quick Start Resources
+
+| Resource | Link |
+|----------|------|
+| SQL Server Express Download | [aka.ms/sql-express](https://www.microsoft.com/sql-server/sql-server-downloads) |
+| Azure Free Account | [azure.com/free](https://azure.microsoft.com/free/) |
+| Azure SQL Free Tier | [Learn More](https://learn.microsoft.com/azure/azure-sql/database/free-offer) |
+| Data API Builder | [GitHub](https://github.com/Azure/data-api-builder) |
+| DAB Documentation | [Learn](https://learn.microsoft.com/azure/data-api-builder/) |
+| SQL Server Samples | [GitHub](https://github.com/microsoft/sql-server-samples) |
 
 ---
 
@@ -1010,20 +1263,10 @@ The multimodal database isn't a future roadmap. **It's the default operating mod
 - [Graph Processing in SQL Server](https://docs.microsoft.com/sql/relational-databases/graphs/sql-graph-overview)
 - [Columnstore Indexes](https://docs.microsoft.com/sql/relational-databases/indexes/columnstore-indexes-overview)
 - [Microsoft Fabric](https://docs.microsoft.com/fabric/)
+- [Data API Builder](https://learn.microsoft.com/azure/data-api-builder/)
 
 ---
 
 *"A petabyte of data gets generated every second in different shapes and forms. It's hot, it's cold, it's structured, semi-structured, analytical, operational. You need a system that understands all of this."*
 
-**Microsoft SQL does.**
-
----
-
-## 💬 Feedback Welcome!
-
-We'd love to hear your thoughts on this document. Please:
-- **Open an Issue** to share feedback, ask questions, or suggest improvements
-- **Start a Discussion** for broader conversations about multimodal databases
-- **Submit a PR** if you'd like to contribute examples or corrections
-
-Your input helps make this resource better for everyone!
+**Microsoft SQL does. And you can start today, for free.**
