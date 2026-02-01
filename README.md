@@ -4,6 +4,20 @@
 
 ---
 
+## 🚀 Quick Start: Try It Yourself
+
+> **Want to run all the examples in this article?** Download the complete SQL script and execute it on SQL Server Developer Edition (free).
+
+| Resource | Link |
+|----------|------|
+| 📥 **Download SQL Scripts** | [Blog_Scripts_All.sql](Blog_Scripts_All.sql) |
+| 💿 **SQL Server Developer Edition (FREE)** | [Download](https://aka.ms/sqldeveloper) |
+| ☁️ **Azure SQL Free Tier** | [Try Free](https://azure.microsoft.com/free/sql-database/) |
+
+*All scripts in this article were tested on SQL Server 2025 Developer Edition.*
+
+---
+
 ## The New Competitive Advantage: Ergonomics = Velocity
 
 > *"In a world where AI agents are generating code, building integrations, and shipping features autonomously, the bottleneck isn't developer talent — it's platform friction."*
@@ -147,9 +161,9 @@ VALUES (12345, '{
 }');
 
 -- 3. Graph: Create relationship edge
-INSERT INTO FraudNetwork.$edge_table (fromNode, toNode, confidence)
-SELECT c.$node_id, d.$node_id, 0.85
-FROM Customers c, Devices d
+INSERT INTO UsesDevice ($from_id, $to_id)
+SELECT c.$node_id, d.$node_id
+FROM FraudNetwork_Customers c, FraudNetwork_Devices d
 WHERE c.CustomerID = 12345 AND d.DeviceID = 'abc-123';
 
 -- 4. If anything fails, everything rolls back
@@ -157,6 +171,8 @@ COMMIT TRANSACTION;
 ```
 
 **Why This Matters**: In a polyglot system, if the graph insert fails after the JSON insert succeeds, you have data inconsistency. Here, it's all-or-nothing.
+
+> 📥 **Try it yourself:** Download [Blog_Scripts_All.sql](Blog_Scripts_All.sql) — Section 1 demonstrates this multi-model transaction.
 
 ---
 
@@ -204,6 +220,8 @@ SELECT * FROM Customers WHERE JSON_CONTAINS(CustomerInfo, '"VIP"', '$.tags') = 1
 
 **Schema evolution** comes free — add new JSON properties anytime, queries on old properties still work, no migrations needed.
 
+> 📥 **Try it yourself:** Sections 2, 3, and 4 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) cover native JSON type, CREATE JSON INDEX, and array optimization.
+
 ---
 
 ## Graph Queries: Relationship-Aware Operations
@@ -220,12 +238,6 @@ CREATE TABLE Person (
     RiskScore FLOAT
 ) AS NODE;
 
-CREATE TABLE Transaction (
-    TxnID INT PRIMARY KEY,
-    Amount MONEY,
-    Timestamp DATETIME2
-) AS NODE;
-
 CREATE TABLE Account (
     AccountID INT PRIMARY KEY,
     Bank NVARCHAR(50)
@@ -234,30 +246,24 @@ CREATE TABLE Account (
 -- Create edges (relationships)
 CREATE TABLE Owns AS EDGE;           -- Person OWNS Account
 CREATE TABLE SentMoney AS EDGE;      -- Account SENT MONEY TO Account
-CREATE TABLE InvolvedIn AS EDGE;     -- Person INVOLVED IN Transaction
+CREATE TABLE Knows AS EDGE;          -- Person KNOWS Person
 ```
 
 ```sql
--- Find fraud rings: People connected through suspicious transaction patterns
+-- Find fraud rings: People connected through account transfers
 SELECT 
     p1.Name AS Sender,
+    p1.RiskScore AS SenderRisk,
+    a1.Bank AS FromBank,
+    a2.Bank AS ToBank,
     p2.Name AS Receiver,
-    STRING_AGG(CAST(t.Amount AS VARCHAR), ', ') AS TransactionAmounts,
-    COUNT(*) AS ConnectionStrength
+    p2.RiskScore AS ReceiverRisk
 FROM 
     Person p1, Owns o1, Account a1,
     SentMoney s,
-    Account a2, Owns o2, Person p2,
-    InvolvedIn i, Transaction t
-WHERE MATCH(
-    p1-(o1)->a1-(s)->a2<-(o2)-p2
-    AND p1-(i)->t
-)
-AND p1.PersonID <> p2.PersonID
-AND t.Amount > 10000
-GROUP BY p1.Name, p2.Name
-HAVING COUNT(*) > 3
-ORDER BY ConnectionStrength DESC;
+    Account a2, Owns o2, Person p2
+WHERE MATCH(p1-(o1)->a1-(s)->a2<-(o2)-p2)
+AND p1.PersonID <> p2.PersonID;
 ```
 
 ### Graph + Relational + JSON in One Query
@@ -290,6 +296,8 @@ ORDER BY FraudConnections DESC;
 ```
 
 **One query. One transaction. One security model. One execution plan.**
+
+> 📥 **Try it yourself:** Section 6 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates graph queries with fraud detection patterns.
 
 ---
 
@@ -325,22 +333,16 @@ VALUES (
 ```
 
 ```sql
--- Semantic search with VECTOR_SEARCH function
-DECLARE @queryEmbedding VECTOR(1536) = 
-    (SELECT embedding FROM dbo.GetEmbedding('comfortable seating for long work sessions'));
+-- Semantic search with VECTOR_DISTANCE function
+DECLARE @searchVector VECTOR(3) = '[0.1, 0.2, 0.3]';
 
 SELECT TOP 10
     ProductID,
     Name,
-    Description,
-    distance
-FROM VECTOR_SEARCH(
-    Products,
-    DescriptionEmbedding,
-    @queryEmbedding,
-    'cosine',
-    10
-) AS results;
+    Price,
+    VECTOR_DISTANCE('cosine', DescriptionEmbedding, @searchVector) AS Similarity
+FROM Products
+ORDER BY Similarity ASC;
 ```
 
 ### Vector + Relational Filtering: Hybrid Search
@@ -349,8 +351,6 @@ Pure vector search often returns irrelevant results. Combine it with relational 
 
 ```sql
 -- Find similar products, but only in-stock items under $500
-DECLARE @searchVector VECTOR(1536) = '[0.023, -0.041, ...]';
-
 SELECT TOP 10
     p.ProductID,
     p.Name,
@@ -367,6 +367,8 @@ ORDER BY Similarity ASC;
 
 **The relational filters execute FIRST**, dramatically reducing the vector comparison space.
 
+> 📥 **Try it yourself:** Section 7 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates vector search (auto-skips gracefully on older SQL Server versions).
+
 ---
 
 ## HTAP: Transactions and Analytics, Together
@@ -377,7 +379,7 @@ Traditional row stores optimize for point lookups. Column stores optimize for an
 
 ```sql
 CREATE TABLE SalesHistory (
-    SaleID BIGINT,
+    SaleID BIGINT IDENTITY,
     ProductID INT,
     CustomerID INT,
     Quantity INT,
@@ -403,6 +405,8 @@ CREATE CLUSTERED COLUMNSTORE INDEX CCI_Sales ON SalesHistory;
 4. **Segment Elimination**: Metadata allows skipping irrelevant segments
 
 **No ETL. No data warehouse sync. Real-time operational intelligence.**
+
+> 📥 **Try it yourself:** Section 8 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates columnstore indexes with analytical queries.
 
 ---
 
@@ -436,6 +440,8 @@ ON dbo.Embeddings     -- Vector data
 WITH (STATE = ON);
 ```
 
+> 📥 **Try it yourself:** Section 9 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates Row-Level Security across data models.
+
 ---
 
 ## Pillar 3: Integrated Performance Primitives
@@ -464,6 +470,8 @@ WITH (
 ```
 
 All indexes participate in the same optimizer cost model.
+
+> 📥 **Try it yourself:** Section 10 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates cross-model indexing strategies.
 
 ---
 
@@ -572,8 +580,8 @@ curl -X POST http://localhost:5000/graphql \
 | Option | Limits | Best For |
 |--------|--------|----------|
 | SQL Server Express | 10GB, 1GB RAM | Dev/test, small apps |
+| SQL Server Developer | Full features, non-prod | **Development & testing** |
 | Azure SQL Free | 100K vCore-seconds/month | Cloud prototyping |
-| SQL Server Developer | Full features, non-prod | Development |
 
 ---
 
@@ -634,10 +642,14 @@ The question isn't whether to adopt multimodal databases — it's how quickly yo
 
 **Ready to consolidate your data stack?**
 
-1. **Try it free**: [Azure SQL Free Tier](https://azure.microsoft.com/free/sql-database/) — 100K vCore-seconds/month, no credit card
-2. **Download**: [SQL Server 2025 Preview](https://www.microsoft.com/sql-server/sql-server-downloads) — Full multimodal features
-3. **Learn more**: [Data API Builder](https://aka.ms/dab) — Instant MCP, REST, GraphQL APIs
-4. **Explore scripts**: All code examples from this article are available in the [Blog_Scripts_All.sql](Blog_Scripts_All.sql) file
+| Action | Link |
+|--------|------|
+| 📥 **Download SQL Scripts** | [Blog_Scripts_All.sql](Blog_Scripts_All.sql) — All examples from this article |
+| 💿 **SQL Server Developer Edition** | [Download FREE](https://aka.ms/sqldeveloper) — Full features for dev/test |
+| ☁️ **Azure SQL Free Tier** | [Try Free](https://azure.microsoft.com/free/sql-database/) — 100K vCore-seconds/month |
+| 📚 **Data API Builder** | [Learn more](https://aka.ms/dab) — Instant MCP, REST, GraphQL APIs |
+
+> 💡 **All scripts in this article were tested on SQL Server 2025 Developer Edition.** Download it free and run every example yourself!
 
 **The multimodal future is here. The only question is: are you building on it?**
 
