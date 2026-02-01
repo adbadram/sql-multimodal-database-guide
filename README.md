@@ -192,7 +192,7 @@ WITH (OPTIMIZE_FOR_ARRAY_SEARCH = ON);
 SELECT * FROM Events WHERE JSON_VALUE(Data, '$.Customer.ID' RETURNING INT) = 16167;
 SELECT * FROM Events WHERE JSON_VALUE(Data, '$.Order.TotalDue' RETURNING DECIMAL(20,4)) > 1000;
 
--- Array search (note: JSON_PATH_EXISTS and JSON_CONTAINS return INT, compare to 1)
+-- IMPORTANT: JSON functions return INT (0 or 1), not boolean — must compare to 1
 SELECT * FROM Customers WHERE JSON_PATH_EXISTS(CustomerInfo, '$.premium') = 1;
 SELECT * FROM Customers WHERE JSON_CONTAINS(CustomerInfo, '"VIP"', '$.tags') = 1;
 ```
@@ -308,10 +308,20 @@ CREATE TABLE Products (
     DescriptionEmbedding VECTOR(1536)  -- OpenAI ada-002 / text-embedding-3-small
 );
 
--- Create DiskANN index for billion-scale similarity search
+-- IMPORTANT: DiskANN index requires Azure SQL Database (cloud)
+-- For SQL Server on-premises, vector queries work without the index (table scan)
 CREATE VECTOR INDEX IX_Products_Embedding
 ON Products(DescriptionEmbedding)
 WITH (METRIC = 'cosine', TYPE = 'DiskANN');
+
+-- Insert with vector embeddings (JSON array format)
+INSERT INTO Products (ProductID, Name, Description, DescriptionEmbedding)
+VALUES (
+    1, 
+    'Ergonomic Office Chair',
+    'Premium mesh back chair with lumbar support',
+    '[0.023, -0.041, 0.087, 0.012, ...]'  -- JSON array format
+);
 ```
 
 ```sql
@@ -339,12 +349,14 @@ Pure vector search often returns irrelevant results. Combine it with relational 
 
 ```sql
 -- Find similar products, but only in-stock items under $500
+DECLARE @searchVector VECTOR(1536) = '[0.023, -0.041, ...]';
+
 SELECT TOP 10
     p.ProductID,
     p.Name,
     p.Price,
     p.StockLevel,
-    VECTOR_DISTANCE('cosine', p.Embedding, @searchVector) AS Similarity
+    VECTOR_DISTANCE('cosine', p.DescriptionEmbedding, @searchVector) AS Similarity
 FROM Products p
 WHERE 
     p.StockLevel > 0
@@ -440,7 +452,7 @@ CREATE INDEX IX_Network_Strength
 ON CustomerNetwork(RelationshipStrength)
 INCLUDE (SourceCustomerID, TargetCustomerID);
 
--- Vector index with DiskANN
+-- Vector index with DiskANN (Azure SQL Database only)
 CREATE VECTOR INDEX IX_Products_Embedding
 ON Products(DescriptionEmbedding)
 WITH (
@@ -482,6 +494,57 @@ Microsoft's approach: **SQL Server as the operational nucleus, Fabric as the ana
 
 ---
 
+## Data API Builder: Instant MCP, REST & GraphQL APIs
+
+**Data API Builder (DAB)** transforms your SQL Server into an AI-ready platform with zero backend code:
+
+```yaml
+# dab-config.json - One config file, three API types
+{
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('SQL_CONNECTION')"
+  },
+  "entities": {
+    "Products": {
+      "source": "dbo.Products",
+      "rest": { "path": "/products" },
+      "graphql": { "singular": "product", "plural": "products" },
+      "permissions": [{
+        "role": "anonymous",
+        "actions": ["read"]
+      }]
+    }
+  }
+}
+```
+
+**What you get instantly:**
+- **MCP Endpoint** — AI agents can query your database directly
+- **REST API** — `GET /api/products?$filter=Price lt 500`
+- **GraphQL API** — Full schema introspection, nested queries
+- **Built-in Security** — Azure AD, API keys, role-based access
+
+```bash
+# Start DAB
+dab start
+
+# AI Agent via MCP
+curl -X POST http://localhost:5000/mcp \
+  -d '{"query": "Find products under $500 with high ratings"}'
+
+# REST
+curl http://localhost:5000/api/products?$filter=Price%20lt%20500
+
+# GraphQL
+curl -X POST http://localhost:5000/graphql \
+  -d '{"query": "{ products(filter: {Price: {lt: 500}}) { Name Price } }"}'
+```
+
+**The AI-native database stack:** SQL Server + DAB = Your data speaks MCP, REST, and GraphQL fluently.
+
+---
+
 ## Economics: Starting at $0
 
 ### Traditional Polyglot Cost Structure
@@ -499,188 +562,85 @@ Microsoft's approach: **SQL Server as the operational nucleus, Fabric as the ana
 
 | Component | Service | Monthly Cost |
 |-----------|---------|-------------|
-| All-in-One | Azure SQL Database | $0 - $500* |
+| All-in-One | Azure SQL | $450 |
+| **Total** | | **$450/month** |
 
-*Free tier available; production workloads scale as needed*
+**80% cost reduction** — and that's before counting reduced DevOps overhead.
 
-### The Hidden Costs You Eliminate
+### Free Tier Options
 
-1. **Integration Development**: No glue code between systems
-2. **Security Auditing**: Single compliance surface
-3. **Operational Overhead**: One system to monitor, patch, backup
-4. **Training**: One query language (T-SQL), one toolset
-5. **Disaster Recovery**: Single recovery process
+| Option | Limits | Best For |
+|--------|--------|----------|
+| SQL Server Express | 10GB, 1GB RAM | Dev/test, small apps |
+| Azure SQL Free | 100K vCore-seconds/month | Cloud prototyping |
+| SQL Server Developer | Full features, non-prod | Development |
 
 ---
 
-## The Agent-Ready Database
+## Technical Notes
 
-2025 was the year of MCP (Model Context Protocol) adoption. **Agents work best with unified data access.**
+### JSON Function Return Types
 
-### Data API Builder (DAB): Your Gateway to MCP, REST, and GraphQL
+SQL Server's JSON functions (`JSON_PATH_EXISTS`, `JSON_CONTAINS`) return `INT` (0 or 1), not boolean. Always compare explicitly:
 
-Microsoft's **[Data API Builder (DAB)](https://learn.microsoft.com/azure/data-api-builder/)** automatically generates:
+```sql
+-- Correct syntax
+WHERE JSON_PATH_EXISTS(Data, '$.field') = 1
+WHERE JSON_CONTAINS(Data, '"value"', '$.array') = 1
 
-- **MCP Server** - AI agents interact via Model Context Protocol
-- **REST APIs** - Full CRUD with filtering and pagination
-- **GraphQL APIs** - Flexible queries with automatic schema
-
-```json
-{
-  "data-source": {
-    "database-type": "mssql",
-    "connection-string": "@env('SQL_CONNECTION_STRING')"
-  },
-  "entities": {
-    "Customer": {
-      "source": "dbo.Customers",
-      "rest": { "enabled": true },
-      "graphql": { "enabled": true }
-    }
-  }
-}
+-- This will cause errors (non-boolean type)
+-- WHERE JSON_PATH_EXISTS(Data, '$.field')  -- Wrong!
 ```
 
-### Why Multimodality Matters for AI
+### Vector Type Format
 
-In the agentic era, **developer ergonomics translates directly to AI ergonomics**. The simpler your data access layer, the faster your agents iterate.
+The `VECTOR` type expects JSON array format:
 
-**Polyglot Agent Workflow:**
-- 5 API calls, 5 auth contexts, 5 failure modes
-- Latency: 200-500ms
+```sql
+-- Correct: JSON array with brackets
+'[0.1, 0.2, 0.3, 0.4]'
 
-**Multimodal Agent Workflow (SQL Server + DAB):**
-- 1 API call, 1 auth context, 1 failure mode
-- Latency: 10-50ms
-
----
-
-## Real-World Architecture: E-Commerce Platform
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    E-Commerce Platform                          │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                   Azure SQL Database                     │   │
-│  │                   (Multimodal Core)                      │   │
-│  │                                                         │   │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐      │   │
-│  │  │ Relational  │ │    JSON     │ │   Graph     │      │   │
-│  │  │             │ │             │ │             │      │   │
-│  │  │ • Customers │ │ • Product   │ │ • Customer  │      │   │
-│  │  │ • Orders    │ │   Specs     │ │   Networks  │      │   │
-│  │  │ • Inventory │ │ • Events    │ │ • Fraud     │      │   │
-│  │  │ • Payments  │ │ • Config    │ │   Rings     │      │   │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘      │   │
-│  │                                                         │   │
-│  │  ┌─────────────┐ ┌─────────────────────────────────┐  │   │
-│  │  │   Vector    │ │         Columnstore             │  │   │
-│  │  │             │ │         (HTAP)                  │  │   │
-│  │  │ • Product   │ │                                 │  │   │
-│  │  │   Search    │ │ • Sales Analytics              │  │   │
-│  │  │ • Similar   │ │ • Inventory Forecasting        │  │   │
-│  │  │   Items     │ │ • Customer Segmentation        │  │   │
-│  │  └─────────────┘ └─────────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+-- Wrong: Plain comma-separated values
+-- '0.1, 0.2, 0.3, 0.4'  -- Will fail!
 ```
 
----
+### DiskANN Index Availability
 
-## Conclusion: Why Microsoft SQL Server for Multimodal
+| Platform | DiskANN Support |
+|----------|-----------------|
+| Azure SQL Database | ✅ Yes |
+| SQL Server 2025 (on-premises) | ❌ Not yet |
 
-The database landscape is converging, and Microsoft SQL Server is leading that convergence:
-
-1. **True multimodality** — Native JSON with JSON INDEX, graph tables, DiskANN vectors, columnstore analytics — integrated at the engine level
-2. **Unified governance** — One security model, one backup, one compliance surface
-3. **AI-ready architecture** — DAB enables MCP, REST, and GraphQL instantly
-4. **Economics that make sense** — Start free, scale as needed
-5. **Velocity that wins** — Ergonomics isn't a luxury, it's your competitive moat
-
-**The Unicorn Playbook:** Digital-native companies don't win by having better architects. They win by removing friction from every layer of the stack. Multimodal databases are friction removal at the data layer.
-
-Microsoft SQL is not just a relational database with features added:
-
-- **JSON is queryable AND indexable** with CREATE JSON INDEX
-- **Graphs are first-class**, not middleware
-- **Vectors are indexed** with DiskANN, not external
-- **Analytics are real-time**, not batch
-- **Governance is unified**, not fragmented
-- **APIs are automatic** via Data API Builder
-
-The multimodal database isn't a future roadmap. **It's the default operating model today.**
+Vector queries work on-premises without the index (table scan), but for billion-scale performance, use Azure SQL Database.
 
 ---
 
-## For Startups & Digital Natives
+## Conclusion: The Consolidation Imperative
 
-If you're building a new product in 2026, **don't start with a polyglot architecture**. You'll spend your seed round on integration code instead of features.
+The multimodal database isn't a nice-to-have — it's becoming a competitive necessity. As AI workloads demand tighter integration between structured and unstructured data, the overhead of polyglot persistence becomes increasingly untenable.
 
-Start multimodal. Ship fast. Refactor never.
+**Microsoft SQL Server's multimodal capabilities offer:**
+1. **Unified transactions** across relational, JSON, graph, and vector
+2. **Single security model** for all data types
+3. **Integrated optimizer** that understands cross-model queries
+4. **Zero-ETL analytics** with columnstore indexes
+5. **AI-ready APIs** with Data API Builder
 
-**The math is simple:**
-- 5 databases × 5 APIs × 5 security configs = 125 integration points
-- 1 database × 1 API × 1 security config = 1 integration point
-
-That's not a 125x difference in complexity — it's a 125x difference in time-to-market.
-
----
-
-## Get Started FREE Today
-
-### Option 1: SQL Server Express (On-Premises)
-
-**[Download SQL Server 2022 Express](https://www.microsoft.com/sql-server/sql-server-downloads)** — Free forever:
-- JSON support (native type in 2025, OPENJSON, JSON_VALUE, FOR JSON)
-- Graph tables and MATCH queries
-- Columnstore indexes for analytics
-- Up to 10GB per database
-
-```powershell
-winget install Microsoft.SQLServer.2022.Express
-```
-
-### Option 2: Azure SQL Database Free Tier
-
-**[Azure SQL Free Offer](https://azure.microsoft.com/free/sql-database/)** — 100,000 vCore seconds/month free:
-- Full cloud-managed experience
-- All multimodal features
-- 32GB storage
-- No credit card required
-
-### Option 3: Data API Builder (Free & Open Source)
-
-**[Get DAB on GitHub](https://github.com/Azure/data-api-builder)**
-
-```bash
-dotnet tool install -g Microsoft.DataApiBuilder
-dab init --database-type mssql --connection-string "YOUR_CONNECTION_STRING"
-dab add Customer --source dbo.Customers --permissions "anonymous:read"
-dab start
-```
-
-In 60 seconds: REST + GraphQL + MCP ready.
+The question isn't whether to adopt multimodal databases — it's how quickly you can consolidate your data sprawl before your competitors do.
 
 ---
 
-## Further Reading
+## Call to Action
 
-- [Azure SQL Database Documentation](https://docs.microsoft.com/azure/azure-sql/)
-- [JSON in SQL Server](https://docs.microsoft.com/sql/relational-databases/json/json-data-sql-server)
-- [CREATE JSON INDEX (SQL Server 2025)](https://learn.microsoft.com/sql/t-sql/statements/create-json-index-transact-sql)
-- [Graph Processing in SQL Server](https://docs.microsoft.com/sql/relational-databases/graphs/sql-graph-overview)
-- [Columnstore Indexes](https://docs.microsoft.com/sql/relational-databases/indexes/columnstore-indexes-overview)
-- [Vector Search in SQL Server](https://learn.microsoft.com/sql/relational-databases/vectors/vectors-sql-server)
-- [Microsoft Fabric](https://docs.microsoft.com/fabric/)
-- [Data API Builder](https://learn.microsoft.com/azure/data-api-builder/)
+**Ready to consolidate your data stack?**
 
----
+1. **Try it free**: [Azure SQL Free Tier](https://azure.microsoft.com/free/sql-database/) — 100K vCore-seconds/month, no credit card
+2. **Download**: [SQL Server 2025 Preview](https://www.microsoft.com/sql-server/sql-server-downloads) — Full multimodal features
+3. **Learn more**: [Data API Builder](https://aka.ms/dab) — Instant MCP, REST, GraphQL APIs
+4. **Explore scripts**: All code examples from this article are available in the [Blog_Scripts_All.sql](Blog_Scripts_All.sql) file
 
-*"A petabyte of data gets generated every second in different shapes and forms. It's hot, it's cold, it's structured, semi-structured, analytical, operational. You need a system that understands all of this."*
-
-**Microsoft SQL does. And you can start today, for free.**
+**The multimodal future is here. The only question is: are you building on it?**
 
 ---
 
-*Last updated: February 2026*
+*Have questions or want to discuss your multimodal architecture? Open an issue in this repository or connect on LinkedIn.*
