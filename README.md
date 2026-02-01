@@ -175,6 +175,11 @@ CREATE TABLE Events (
 CREATE JSON INDEX IX_Events_Data
 ON Events (Data)
 FOR ('$.Customer.ID', '$.Order.TotalDue');
+
+-- Array-optimized index for searching within JSON arrays
+CREATE JSON INDEX IX_CustomerJson
+ON Customers (CustomerInfo)
+WITH (OPTIMIZE_FOR_ARRAY_SEARCH = ON);
 ```
 
 **Why native matters:**
@@ -186,6 +191,10 @@ FOR ('$.Customer.ID', '$.Order.TotalDue');
 -- These queries use the JSON index (index seek, not table scan)
 SELECT * FROM Events WHERE JSON_VALUE(Data, '$.Customer.ID' RETURNING INT) = 16167;
 SELECT * FROM Events WHERE JSON_VALUE(Data, '$.Order.TotalDue' RETURNING DECIMAL(20,4)) > 1000;
+
+-- Array search (note: JSON_PATH_EXISTS and JSON_CONTAINS return INT, compare to 1)
+SELECT * FROM Customers WHERE JSON_PATH_EXISTS(CustomerInfo, '$.premium') = 1;
+SELECT * FROM Customers WHERE JSON_CONTAINS(CustomerInfo, '"VIP"', '$.tags') = 1;
 ```
 
 | Without JSON Index | With JSON Index |
