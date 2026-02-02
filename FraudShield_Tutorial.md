@@ -686,26 +686,31 @@ This query combined:
 
 ## Economics: The Business Case
 
-### What You'd Pay with Polyglot
+### The Polyglot Tax
 
-| Service | Monthly Cost |
-|---------|-------------|
-| Cloud PostgreSQL (transactions) | $400 |
-| MongoDB Atlas (device data) | $300 |
-| Neo4j AuraDB (graph) | $400 |
-| Pinecone (vectors) | $200 |
-| Blockchain service (audit) | $300 |
-| Snowflake (analytics) | $800 |
-| **Total** | **$2,400/month** |
+Every additional database in your stack comes with hidden costs:
 
-### What You Pay with Multimodal
+| Cost Category | Polyglot (6 databases) | Multimodal (1 database) |
+|---------------|------------------------|-------------------------|
+| Infrastructure | 6 separate services | 1 unified platform |
+| Licensing | 6 vendor agreements | 1 agreement |
+| Security audits | 6 attack surfaces | 1 security boundary |
+| Compliance certifications | 6× the paperwork | 1 certification scope |
+| Backup & DR | 6 strategies to coordinate | 1 consistent approach |
+| Team expertise | Specialists for each | Single platform mastery |
+| Integration code | Thousands of lines | Zero sync logic |
+| Incident response | Which system failed? | One place to look |
 
-| Service | Monthly Cost |
-|---------|-------------|
-| Azure SQL Database (everything) | $450 |
-| **Total** | **$450/month** |
+### The Real Savings
 
-**81% cost reduction.** Plus: one team to manage, one security audit, one backup strategy, one compliance certification.
+It's not just about infrastructure costs. Calculate your **total cost of ownership**:
+
+- **Developer time**: How many hours debugging sync issues between systems?
+- **Ops overhead**: How many runbooks for 6 different backup procedures?
+- **Latency tax**: How much revenue lost to 50-100ms cross-database hops?
+- **Consistency bugs**: How many customer complaints from eventually-consistent data?
+
+**The multimodal advantage compounds.** One team. One security model. One backup strategy. One compliance certification. One place where your AI agents connect.
 
 ---
 
