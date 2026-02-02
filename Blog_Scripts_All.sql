@@ -2,9 +2,6 @@
 -- Microsoft SQL Multimodal Database - All Blog Scripts
 -- For SQL Server 2025 / Azure SQL Database
 -- ============================================================================
--- TESTED ON: SQL Server 2025 Developer Edition
--- Download SQL Server Developer (FREE): https://aka.ms/sqldeveloper
--- ============================================================================
 -- NOTE: Execute sections individually. Some require SQL Server 2025 features.
 -- ============================================================================
 
@@ -536,7 +533,90 @@ SELECT * FROM MT_Events;     -- Only sees Tenant 200 data
 GO
 
 -- ============================================================================
--- SECTION 10: CROSS-MODEL INDEXING STRATEGIES
+-- SECTION 10: LEDGER TABLES - IMMUTABLE AUDIT TRAIL
+-- ============================================================================
+-- Ledger tables provide tamper-evident, cryptographically verifiable history
+-- Perfect for: Financial transactions, compliance, supply chain, healthcare
+-- ============================================================================
+
+-- Create an updatable ledger table for financial transactions
+CREATE TABLE FinancialTransactions (
+    TransactionID INT PRIMARY KEY,
+    AccountID INT NOT NULL,
+    Amount MONEY NOT NULL,
+    TransactionType NVARCHAR(20) NOT NULL,
+    Description NVARCHAR(500),
+    TransactionDate DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+WITH (SYSTEM_VERSIONING = ON, LEDGER = ON);
+
+GO
+
+-- Insert some transactions
+INSERT INTO FinancialTransactions (TransactionID, AccountID, Amount, TransactionType, Description)
+VALUES 
+(1, 1001, 5000.00, 'DEPOSIT', 'Initial deposit'),
+(2, 1001, -500.00, 'WITHDRAWAL', 'ATM withdrawal'),
+(3, 1002, 10000.00, 'DEPOSIT', 'Wire transfer received'),
+(4, 1001, -1500.00, 'TRANSFER', 'Transfer to account 1002');
+
+GO
+
+-- Update a transaction (ledger tracks the change!)
+UPDATE FinancialTransactions 
+SET Description = 'Initial deposit - verified'
+WHERE TransactionID = 1;
+
+GO
+
+-- View the ledger history - shows ALL changes with cryptographic proof
+SELECT 
+    TransactionID,
+    AccountID,
+    Amount,
+    TransactionType,
+    Description,
+    ledger_start_transaction_id,
+    ledger_end_transaction_id,
+    ledger_operation_type_desc
+FROM FinancialTransactions_Ledger
+ORDER BY TransactionID, ledger_start_transaction_id;
+
+GO
+
+-- Verify ledger integrity - cryptographic verification
+-- This proves no tampering has occurred
+EXECUTE sp_verify_database_ledger_from_digest_storage;
+
+GO
+
+-- Create an append-only ledger table (no updates/deletes allowed)
+CREATE TABLE AuditLog (
+    LogID INT IDENTITY PRIMARY KEY,
+    EventType NVARCHAR(50) NOT NULL,
+    EventData JSON,
+    UserName NVARCHAR(100) DEFAULT SUSER_SNAME(),
+    EventTime DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+WITH (LEDGER = ON (APPEND_ONLY = ON));
+
+GO
+
+-- Insert audit events
+INSERT INTO AuditLog (EventType, EventData) VALUES 
+('LOGIN', '{"ip":"192.168.1.1","browser":"Chrome"}'),
+('DATA_ACCESS', '{"table":"Customers","rows":150}'),
+('CONFIG_CHANGE', '{"setting":"MaxConnections","oldValue":100,"newValue":200}');
+
+GO
+
+-- Query audit log - immutable record
+SELECT * FROM AuditLog ORDER BY EventTime;
+
+GO
+
+-- ============================================================================
+-- SECTION 11: CROSS-MODEL INDEXING STRATEGIES
 -- ============================================================================
 
 -- Approach 1: Computed column index (works in older SQL Server versions)
@@ -570,6 +650,7 @@ GO
 -- END OF SCRIPTS
 -- ============================================================================
 PRINT 'All blog scripts executed successfully!';
-PRINT 'Note: Some features (native JSON type, VECTOR, CREATE JSON INDEX) require SQL Server 2025.';
-PRINT 'Download SQL Server Developer Edition (FREE): https://aka.ms/sqldeveloper';
+PRINT 'Tested on: SQL Server 2025 Developer Edition';
+PRINT 'Download FREE: https://aka.ms/sqldeveloper';
+PRINT 'Note: Some features (native JSON type, VECTOR, CREATE JSON INDEX, LEDGER) require SQL Server 2025.';
 GO
