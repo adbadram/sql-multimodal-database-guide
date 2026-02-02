@@ -547,7 +547,7 @@ WITH (STATE = ON);
 
 ## Ship It: Data API Builder for Instant APIs
 
-Your FraudShield AI needs APIs. For the mobile app. For the dashboard. For AI agents. Data API Builder generates them instantly:
+Your FraudShield AI needs APIs. For the mobile app. For the dashboard. For AI agents. Data API Builder generates them instantly—including **MCP (Model Context Protocol)** endpoints that let AI assistants query your multimodal data directly:
 
 ```json
 {
@@ -584,6 +584,103 @@ curl -X POST https://api.fraudshield.ai/fraud/check \
 curl -X POST https://api.fraudshield.ai/graphql \
   -d '{"query": "{ decisions(filter: {Decision: {eq: \"BLOCKED\"}}) { TxnID RiskScore } }"}'
 ```
+
+---
+
+## Talk to Your Data: MCP for AI Agents
+
+Here's where it gets exciting. **MCP (Model Context Protocol)** is the emerging standard for AI agents to interact with external data sources. Data API Builder exposes your entire FraudShield database as an MCP endpoint.
+
+**What does this mean?** Your AI assistant—whether it's Copilot, Claude, or a custom agent—can directly query your multimodal data using natural language.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AI Agent + MCP + FraudShield                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   User: "Show me all blocked transactions from users           │
+│          connected to known fraud rings in the last 24 hours"  │
+│                              │                                  │
+│                              ▼                                  │
+│                    ┌─────────────────┐                         │
+│                    │    AI Agent     │                         │
+│                    │  (Copilot/etc)  │                         │
+│                    └────────┬────────┘                         │
+│                              │ MCP Protocol                     │
+│                              ▼                                  │
+│                    ┌─────────────────┐                         │
+│                    │  Data API       │                         │
+│                    │  Builder (DAB)  │                         │
+│                    └────────┬────────┘                         │
+│                              │                                  │
+│           ┌──────────────────┼──────────────────┐               │
+│           │                  │                  │               │
+│           ▼                  ▼                  ▼               │
+│     [Relational]        [Graph]           [Ledger]             │
+│     blocked txns    fraud network      audit proof             │
+│                                                                 │
+│   Result: Structured data + Graph traversal + Verified audit   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Configure MCP in Data API Builder
+
+```json
+{
+  "runtime": {
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp"
+    }
+  },
+  "entities": {
+    "FraudAnalysis": {
+      "source": "dbo.vw_FraudAnalysis",
+      "mcp": {
+        "description": "Query fraud decisions with risk scores, graph connections, and audit trails",
+        "enabled": true
+      }
+    }
+  }
+}
+```
+
+### Natural Language to Multimodal Queries
+
+With MCP enabled, your AI agent translates natural language into the appropriate multimodal query:
+
+| User Says | Agent Executes |
+|-----------|---------------|
+| "Find suspicious users" | Graph query: 2-hop fraud network analysis |
+| "What devices did user 123 use?" | JSON query: Device fingerprints |
+| "Similar fraud patterns to this transaction" | Vector search: Embedding similarity |
+| "Prove this decision wasn't tampered with" | Ledger query: Cryptographic verification |
+| "Fraud trends this quarter" | Columnstore: Analytical aggregation |
+
+**Example conversation with your FraudShield data:**
+
+```
+You: "Which users have the highest risk scores and are connected 
+      to accounts that received money from blocked transactions?"
+
+AI Agent (via MCP): 
+┌─────────────────────────────────────────────────────────────────┐
+│ Found 3 high-risk users connected to suspicious money flows:   │
+├─────────────────────────────────────────────────────────────────┤
+│ User        │ Risk Score │ Connections │ Blocked Txn Volume   │
+├─────────────────────────────────────────────────────────────────┤
+│ Bob Smith   │ 0.92       │ 4 accounts  │ $45,000              │
+│ Jane Doe    │ 0.87       │ 2 accounts  │ $23,500              │
+│ Tom Wilson  │ 0.81       │ 3 accounts  │ $18,200              │
+└─────────────────────────────────────────────────────────────────┘
+
+This query combined:
+• Graph traversal (account connections)
+• Relational joins (transaction amounts)  
+• Ledger verification (blocked status integrity)
+```
+
+**The magic:** The AI agent doesn't need to know about your graph schema, JSON paths, or vector embeddings. It speaks natural language. MCP + DAB + multimodal SQL handles the rest.
 
 ---
 
