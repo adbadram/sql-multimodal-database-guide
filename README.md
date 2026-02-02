@@ -4,17 +4,7 @@
 
 ---
 
-## 🚀 Quick Start: Try It Yourself
-
-> **Want to run all the examples in this article?** Download the complete SQL script and execute it on SQL Server Developer Edition (free).
-
-| Resource | Link |
-|----------|------|
-| 📥 **Download SQL Scripts** | [Blog_Scripts_All.sql](Blog_Scripts_All.sql) |
-| 💿 **SQL Server Developer Edition (FREE)** | [Download](https://aka.ms/sqldeveloper) |
-| ☁️ **Azure SQL Free Tier** | [Try Free](https://azure.microsoft.com/free/sql-database/) |
-
-*All scripts in this article were tested on SQL Server 2025 Developer Edition.*
+By the dawn of 2026, the database industry has undergone a fundamental transformation. While many vendors are still bolting features onto single-purpose engines, **Microsoft SQL**—available via cloud (**Azure SQL Database**) or on-premises (**SQL Server**)—has emerged as a true multimodal database: a unified platform that natively supports relational, JSON, graph, vector, ledger, and analytical workloads in a single engine. This isn't about feature aggregation; it's about architectural convergence that delivers real business value.
 
 ---
 
@@ -39,10 +29,6 @@
 
 ---
 
-By the dawn of 2026, the database industry has undergone a fundamental transformation. While many vendors are still bolting features onto single-purpose engines, Microsoft SQL Server has emerged as a true multimodal database—a unified platform that natively supports relational, JSON, graph, vector, and analytical workloads in a single engine. This isn't about feature aggregation; it's about architectural convergence that delivers real business value.
-
----
-
 ## The Problem With Single-Model Thinking
 
 For decades, we've lived in a world of database specialization:
@@ -54,8 +40,9 @@ For decades, we've lived in a world of database specialization:
 | Graph | Graph databases | Relationship traversal |
 | Vector | Vector databases | Similarity search |
 | Analytical | OLAP warehouses | Aggregate queries |
+| Ledger | Blockchain/immutable DBs | Tamper-proof audit |
 
-**Microsoft SQL Server breaks this paradigm** by delivering ALL of these capabilities in a single, unified engine.
+**Microsoft SQL breaks this paradigm** by delivering ALL of these capabilities in a single, unified engine—and it's also **free** to get started with Developer Edition or Azure SQL Free Tier.
 
 **The assumption was simple**: pick the right tool for the job. But modern applications don't have *one* job.
 
@@ -68,6 +55,7 @@ Consider an e-commerce fraud detection system. In a single request, it must:
 3. **Traverse a graph**: Map relationships between this user and known fraud rings
 4. **Perform vector search**: Find semantically similar fraud patterns
 5. **Run analytics**: Compare this transaction against statistical baselines
+6. **Verify ledger**: Ensure transaction history hasn't been tampered with
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -84,13 +72,13 @@ Consider an e-commerce fraud detection system. In a single request, it must:
 ```
 
 In the polyglot persistence model, this requires:
-- 4+ different databases
+- 5+ different databases
 - Multiple network round-trips
 - Complex orchestration logic
 - Separate security models
 - No transactional guarantees across the operation
 
-**The latency cost alone is devastating.** Each database hop adds 1-5ms network latency. A 4-system query chain with 3ms average latency costs 12ms just in network overhead—before any actual computation.
+**The latency cost alone is devastating.** Each database hop adds 1-5ms network latency. A 5-system query chain with 3ms average latency costs 15ms just in network overhead—before any actual computation.
 
 ---
 
@@ -134,7 +122,7 @@ Let's prove each pillar with concrete examples.
 
 ### Relational Foundation: The ACID Guarantee
 
-Every multimodal operation must respect transactional semantics. Here's how SQL Server handles this:
+Every multimodal operation must respect transactional semantics. Here's how Microsoft SQL handles this:
 
 ```sql
 -- Begin a transaction spanning multiple data models
@@ -171,8 +159,6 @@ COMMIT TRANSACTION;
 ```
 
 **Why This Matters**: In a polyglot system, if the graph insert fails after the JSON insert succeeds, you have data inconsistency. Here, it's all-or-nothing.
-
-> 📥 **Try it yourself:** Download [Blog_Scripts_All.sql](Blog_Scripts_All.sql) — Section 1 demonstrates this multi-model transaction.
 
 ---
 
@@ -220,15 +206,13 @@ SELECT * FROM Customers WHERE JSON_CONTAINS(CustomerInfo, '"VIP"', '$.tags') = 1
 
 **Schema evolution** comes free — add new JSON properties anytime, queries on old properties still work, no migrations needed.
 
-> 📥 **Try it yourself:** Sections 2, 3, and 4 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) cover native JSON type, CREATE JSON INDEX, and array optimization.
-
 ---
 
 ## Graph Queries: Relationship-Aware Operations
 
 ### The Power of MATCH Patterns
 
-SQL Server's graph extension brings Cypher-like pattern matching directly into T-SQL:
+Microsoft SQL's graph extension brings Cypher-like pattern matching directly into T-SQL:
 
 ```sql
 -- Create nodes for fraud detection network
@@ -296,8 +280,6 @@ ORDER BY FraudConnections DESC;
 ```
 
 **One query. One transaction. One security model. One execution plan.**
-
-> 📥 **Try it yourself:** Section 6 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates graph queries with fraud detection patterns.
 
 ---
 
@@ -367,7 +349,73 @@ ORDER BY Similarity ASC;
 
 **The relational filters execute FIRST**, dramatically reducing the vector comparison space.
 
-> 📥 **Try it yourself:** Section 7 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates vector search (auto-skips gracefully on older SQL Server versions).
+---
+
+## Ledger Tables: Tamper-Proof Audit Trail
+
+### Blockchain-Grade Integrity Without the Blockchain
+
+For regulated industries—finance, healthcare, supply chain—**ledger tables** provide cryptographically verifiable, tamper-evident history. No separate blockchain infrastructure needed.
+
+```sql
+-- Create an updatable ledger table for financial transactions
+CREATE TABLE FinancialTransactions (
+    TransactionID INT PRIMARY KEY,
+    AccountID INT NOT NULL,
+    Amount MONEY NOT NULL,
+    TransactionType NVARCHAR(20) NOT NULL,
+    Description NVARCHAR(500),
+    TransactionDate DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+WITH (SYSTEM_VERSIONING = ON, LEDGER = ON);
+```
+
+```sql
+-- Insert and update transactions - ledger tracks everything
+INSERT INTO FinancialTransactions (TransactionID, AccountID, Amount, TransactionType, Description)
+VALUES (1, 1001, 5000.00, 'DEPOSIT', 'Initial deposit');
+
+UPDATE FinancialTransactions 
+SET Description = 'Initial deposit - verified'
+WHERE TransactionID = 1;
+
+-- View complete history with cryptographic proof
+SELECT 
+    TransactionID,
+    Amount,
+    Description,
+    ledger_operation_type_desc  -- INSERT, UPDATE, DELETE
+FROM FinancialTransactions_Ledger
+ORDER BY ledger_start_transaction_id;
+
+-- Verify ledger integrity - proves no tampering
+EXECUTE sp_verify_database_ledger_from_digest_storage;
+```
+
+### Append-Only Ledger for Audit Logs
+
+```sql
+-- Create append-only ledger (no updates/deletes allowed)
+CREATE TABLE AuditLog (
+    LogID INT IDENTITY PRIMARY KEY,
+    EventType NVARCHAR(50) NOT NULL,
+    EventData JSON,
+    UserName NVARCHAR(100) DEFAULT SUSER_SNAME(),
+    EventTime DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+WITH (LEDGER = ON (APPEND_ONLY = ON));
+
+-- Insert events - immutable forever
+INSERT INTO AuditLog (EventType, EventData) VALUES 
+('LOGIN', '{"ip":"192.168.1.1","browser":"Chrome"}'),
+('CONFIG_CHANGE', '{"setting":"MaxConnections","oldValue":100,"newValue":200}');
+```
+
+**Use cases:**
+- **Financial services**: Regulatory compliance, transaction history
+- **Healthcare**: Patient record integrity, HIPAA compliance
+- **Supply chain**: Chain of custody verification
+- **Legal**: Contract and document integrity
 
 ---
 
@@ -375,7 +423,7 @@ ORDER BY Similarity ASC;
 
 ### The Columnstore Revolution
 
-Traditional row stores optimize for point lookups. Column stores optimize for analytical scans. SQL Server supports **both on the same data**:
+Traditional row stores optimize for point lookups. Column stores optimize for analytical scans. Microsoft SQL supports **both on the same data**:
 
 ```sql
 CREATE TABLE SalesHistory (
@@ -406,8 +454,6 @@ CREATE CLUSTERED COLUMNSTORE INDEX CCI_Sales ON SalesHistory;
 
 **No ETL. No data warehouse sync. Real-time operational intelligence.**
 
-> 📥 **Try it yourself:** Section 8 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates columnstore indexes with analytical queries.
-
 ---
 
 ## Pillar 2: Unified Governance
@@ -419,11 +465,12 @@ In a polyglot architecture, security is fragmented:
 - 5 different compliance audits
 - 5 different attack surfaces
 
-**Multimodal Security in SQL Server:**
-- Azure AD Integration (Single Sign-On)
+**Multimodal Security in Microsoft SQL:**
+- Azure AD / Entra ID Integration (Single Sign-On)
 - Row-Level Security (ALL data models)
 - Dynamic Data Masking (JSON, Graph, Vector)
 - Always Encrypted (Client-side encryption)
+- Ledger for tamper-proof audit
 - Unified Audit Log
 
 ```sql
@@ -439,8 +486,6 @@ ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID)
 ON dbo.Embeddings     -- Vector data
 WITH (STATE = ON);
 ```
-
-> 📥 **Try it yourself:** Section 9 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates Row-Level Security across data models.
 
 ---
 
@@ -471,13 +516,11 @@ WITH (
 
 All indexes participate in the same optimizer cost model.
 
-> 📥 **Try it yourself:** Section 10 in [Blog_Scripts_All.sql](Blog_Scripts_All.sql) demonstrates cross-model indexing strategies.
-
 ---
 
 ## The Microsoft Fabric Integration Story
 
-Microsoft's approach: **SQL Server as the operational nucleus, Fabric as the analytics scale-out**.
+Microsoft's approach: **Microsoft SQL as the operational nucleus, Fabric as the analytics scale-out**.
 
 ### Zero-ETL Architecture
 
@@ -504,7 +547,7 @@ Microsoft's approach: **SQL Server as the operational nucleus, Fabric as the ana
 
 ## Data API Builder: Instant MCP, REST & GraphQL APIs
 
-**Data API Builder (DAB)** transforms your SQL Server into an AI-ready platform with zero backend code:
+**Data API Builder (DAB)** transforms your Microsoft SQL database into an AI-ready platform with zero backend code:
 
 ```yaml
 # dab-config.json - One config file, three API types
@@ -549,7 +592,7 @@ curl -X POST http://localhost:5000/graphql \
   -d '{"query": "{ products(filter: {Price: {lt: 500}}) { Name Price } }"}'
 ```
 
-**The AI-native database stack:** SQL Server + DAB = Your data speaks MCP, REST, and GraphQL fluently.
+**The AI-native database stack:** Microsoft SQL + DAB = Your data speaks MCP, REST, and GraphQL fluently.
 
 ---
 
@@ -564,7 +607,8 @@ curl -X POST http://localhost:5000/graphql \
 | Graph | Graph DBaaS | $400 |
 | Vector | Vector DBaaS | $200 |
 | Analytics | Data Warehouse | $800 |
-| **Total** | | **$2,200/month** |
+| Ledger | Blockchain service | $300 |
+| **Total** | | **$2,500/month** |
 
 ### Multimodal Consolidation
 
@@ -573,14 +617,14 @@ curl -X POST http://localhost:5000/graphql \
 | All-in-One | Azure SQL | $450 |
 | **Total** | | **$450/month** |
 
-**80% cost reduction** — and that's before counting reduced DevOps overhead.
+**82% cost reduction** — and that's before counting reduced DevOps overhead.
 
 ### Free Tier Options
 
 | Option | Limits | Best For |
 |--------|--------|----------|
 | SQL Server Express | 10GB, 1GB RAM | Dev/test, small apps |
-| SQL Server Developer | Full features, non-prod | **Development & testing** |
+| **SQL Server Developer** | **Full features, non-prod** | **Development & testing** |
 | Azure SQL Free | 100K vCore-seconds/month | Cloud prototyping |
 
 ---
@@ -589,7 +633,7 @@ curl -X POST http://localhost:5000/graphql \
 
 ### JSON Function Return Types
 
-SQL Server's JSON functions (`JSON_PATH_EXISTS`, `JSON_CONTAINS`) return `INT` (0 or 1), not boolean. Always compare explicitly:
+Microsoft SQL's JSON functions (`JSON_PATH_EXISTS`, `JSON_CONTAINS`) return `INT` (0 or 1), not boolean. Always compare explicitly:
 
 ```sql
 -- Correct syntax
@@ -612,14 +656,17 @@ The `VECTOR` type expects JSON array format:
 -- '0.1, 0.2, 0.3, 0.4'  -- Will fail!
 ```
 
-### DiskANN Index Availability
+### Platform Availability
 
-| Platform | DiskANN Support |
-|----------|-----------------|
-| Azure SQL Database | ✅ Yes |
-| SQL Server 2025 (on-premises) | ❌ Not yet |
-
-Vector queries work on-premises without the index (table scan), but for billion-scale performance, use Azure SQL Database.
+| Feature | Azure SQL Database | SQL Server 2025 (on-prem) |
+|---------|-------------------|---------------------------|
+| Native JSON type | ✅ | ✅ |
+| CREATE JSON INDEX | ✅ | ✅ |
+| Graph tables | ✅ | ✅ |
+| VECTOR type | ✅ | ✅ |
+| DiskANN index | ✅ | ❌ (coming soon) |
+| Ledger tables | ✅ | ✅ |
+| Columnstore | ✅ | ✅ |
 
 ---
 
@@ -627,12 +674,13 @@ Vector queries work on-premises without the index (table scan), but for billion-
 
 The multimodal database isn't a nice-to-have — it's becoming a competitive necessity. As AI workloads demand tighter integration between structured and unstructured data, the overhead of polyglot persistence becomes increasingly untenable.
 
-**Microsoft SQL Server's multimodal capabilities offer:**
-1. **Unified transactions** across relational, JSON, graph, and vector
+**Microsoft SQL's multimodal capabilities offer:**
+1. **Unified transactions** across relational, JSON, graph, vector, and ledger
 2. **Single security model** for all data types
 3. **Integrated optimizer** that understands cross-model queries
 4. **Zero-ETL analytics** with columnstore indexes
-5. **AI-ready APIs** with Data API Builder
+5. **Tamper-proof audit** with ledger tables
+6. **AI-ready APIs** with Data API Builder
 
 The question isn't whether to adopt multimodal databases — it's how quickly you can consolidate your data sprawl before your competitors do.
 
@@ -644,12 +692,12 @@ The question isn't whether to adopt multimodal databases — it's how quickly yo
 
 | Action | Link |
 |--------|------|
-| 📥 **Download SQL Scripts** | [Blog_Scripts_All.sql](Blog_Scripts_All.sql) — All examples from this article |
-| 💿 **SQL Server Developer Edition** | [Download FREE](https://aka.ms/sqldeveloper) — Full features for dev/test |
-| ☁️ **Azure SQL Free Tier** | [Try Free](https://azure.microsoft.com/free/sql-database/) — 100K vCore-seconds/month |
-| 📚 **Data API Builder** | [Learn more](https://aka.ms/dab) — Instant MCP, REST, GraphQL APIs |
+| 📥 **Download SQL Scripts** | [Blog_Scripts_All.sql](Blog_Scripts_All.sql) |
+| 💿 **SQL Server Developer Edition** | [Download FREE](https://aka.ms/sqldeveloper) |
+| ☁️ **Azure SQL Free Tier** | [Try Free](https://azure.microsoft.com/free/sql-database/) |
+| 📚 **Data API Builder** | [Learn more](https://aka.ms/dab) |
 
-> 💡 **All scripts in this article were tested on SQL Server 2025 Developer Edition.** Download it free and run every example yourself!
+> ✅ **All scripts in this article were tested on SQL Server 2025 Developer Edition.**
 
 **The multimodal future is here. The only question is: are you building on it?**
 
