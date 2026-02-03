@@ -4,7 +4,7 @@
 
 ---
 
-By the dawn of 2026, the database industry has undergone a fundamental transformation. While many vendors are still bolting features onto single-purpose engines, **Microsoft SQL**—available via cloud (**Azure SQL Database**) or on-premises (**SQL Server**)—has emerged as a true multimodal database: a unified platform that natively supports relational, JSON, graph, vector, ledger, and analytical workloads in a single engine. This isn't about feature aggregation; it's about architectural convergence that delivers real business value.
+By the dawn of 2026, the database industry has undergone a fundamental transformation. While many vendors are still bolting features onto single-purpose engines, **SQL Server 2025** and **Azure SQL Database** have emerged as true multimodal databases: a unified platform that natively supports relational, JSON, graph, vector, ledger, and analytical workloads in a single engine. Whether you deploy on-premises or in the cloud, it's the same engine, same T-SQL, same capabilities. This isn't about feature aggregation; it's about architectural convergence that delivers real business value.
 
 ---
 
