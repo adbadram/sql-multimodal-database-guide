@@ -118,13 +118,16 @@ PRINT '=========================================================================
 GO
 
 -- All fraud decisions are immutable and verifiable
+-- NOTE: Ledger tables in SQL Server 2025 do NOT support JSON, VECTOR, XML, 
+--       sql_variant, filestream, or user-defined types.
+--       Use NVARCHAR(MAX) for flexible data and parse as JSON in queries.
 CREATE TABLE FraudDecisions (
     DecisionID BIGINT IDENTITY PRIMARY KEY,
     TxnID BIGINT NOT NULL,
     UserID INT NOT NULL,
     Decision NVARCHAR(20) NOT NULL,  -- APPROVED, BLOCKED, REVIEW
     RiskScore FLOAT,
-    Reasons JSON,  -- Flexible: different reasons for different decisions
+    Reasons NVARCHAR(MAX),  -- Store as text, query with JSON functions
     DecidedAt DATETIME2 DEFAULT SYSUTCDATETIME(),
     DecidedBy NVARCHAR(100) DEFAULT 'SYSTEM'
 )
@@ -430,6 +433,8 @@ BEGIN
     
     -- ═══════════════════════════════════════════════════════════════
     -- LAYER 5: LEDGER - Immutable audit record
+    -- Note: Reasons stored as NVARCHAR(MAX) for ledger compatibility,
+    --       but contains valid JSON that can be queried with JSON functions
     -- ═══════════════════════════════════════════════════════════════
     INSERT INTO FraudDecisions (TxnID, UserID, Decision, RiskScore, Reasons)
     VALUES (@TxnID, @UserID, @Decision, @RiskScore, @Reasons);
@@ -525,8 +530,11 @@ PRINT '  • Accounts (NODE) - Graph-enabled bank accounts';
 PRINT '  • Transactions - Financial transactions with Columnstore';
 PRINT '  • DeviceFingerprints - JSON device data with JSON index';
 PRINT '  • FraudPatterns - Vector embeddings for similarity search';
-PRINT '  • FraudDecisions - Ledger table for tamper-proof audit';
+PRINT '  • FraudDecisions - Ledger table (Reasons as NVARCHAR for ledger compat)';
 PRINT '  • Owns, TransferredTo, Knows (EDGE) - Graph relationships';
+PRINT '';
+PRINT 'NOTE: Ledger tables in SQL Server 2025 do not support JSON/VECTOR columns.';
+PRINT '      FraudDecisions.Reasons uses NVARCHAR(MAX) but stores valid JSON.';
 PRINT '';
 PRINT 'Stored Procedures:';
 PRINT '  • sp_CheckFraud - Complete multimodal fraud check';
