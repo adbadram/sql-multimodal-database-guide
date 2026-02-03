@@ -511,10 +511,10 @@ SELECT
     JSON_VALUE(Reasons, '$.graphAnalysis') AS GraphReason,
     JSON_VALUE(Reasons, '$.vectorMatch') AS VectorReason,
     ledger_operation_type_desc AS Operation,
-    ledger_start_transaction_id AS LedgerTxn
+    ledger_transaction_id AS LedgerTxn
 FROM FraudDecisions_Ledger
 WHERE TxnID = 10001
-ORDER BY ledger_start_transaction_id;
+ORDER BY ledger_transaction_id;
 GO
 
 -- ============================================================================
