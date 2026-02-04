@@ -527,57 +527,6 @@ All operations: SAME transaction context, SAME optimizer cost model
 
 > ⚡ **Key Insight:** Cross-model indexing means the optimizer can choose the best access path regardless of data model. A query joining relational tables with JSON documents and graph edges gets the SAME optimization as a pure relational query.
 
-### The Latency Math
-
-In a polyglot architecture, fraud detection requires:
-
-```
-PostgreSQL (users)     → 3ms network hop
-MongoDB (devices)      → 3ms network hop  
-Neo4j (graph)          → 3ms network hop
-Pinecone (vectors)     → 3ms network hop
-Kafka → Snowflake      → 10ms async
-                         ─────────────
-                         22ms+ MINIMUM (just network overhead)
-```
-
-**With multimodal SQL Server:**
-```
-sp_CheckFraud          → 0ms (in-process)
-All five checks        → ~2-5ms total
-                         ─────────────
-                         <5ms TOTAL (compute only, no network)
-```
-
-That's **4-10x faster**—and more importantly, **deterministic latency** with no network variability.
-
-### How Columnstore Enables Real-Time Analytics
-
-Your executive dashboard query (Step 6) runs on the **same** Transactions table that handles OLTP inserts. How?
-
-**Row Store (Traditional OLTP):**
-```
-Read entire row → [TxnID][From][To][Amount][Time][Status]
-                  Process one row at a time
-                  For 10M rows: ~45 seconds
-```
-
-**Columnstore (Analytical):**
-```
-Read only needed columns → [Amount] [Status]
-                          Compressed 10-15x
-                          Batch mode: 900 rows per CPU cycle
-                          For 10M rows: ~200ms
-```
-
-| Metric | Row Store | Columnstore |
-|--------|-----------|-------------|
-| Data read | ~500 MB | ~12 MB |
-| CPU mode | Row-by-row | Batch (900 rows/cycle) |
-| Typical time | 45 sec | 0.2 sec |
-
-**No ETL. No data warehouse sync. Real-time operational analytics.**
-
 ### Single Security Boundary
 
 In polyglot land, your security team audits:
@@ -641,106 +590,135 @@ RESTORE DATABASE FraudShieldDB WITH STOPAT = '2026-02-04 10:30:00';
 
 ---
 
-## Ship It: From Database to Production API
+## Unified Security: One Policy, All Data
 
-You've built FraudShield's multimodal schema. Now let's expose it to the world.
+With polyglot persistence, you'd write 6 different security policies. Here, it's one:
 
-### Option 1: Data API Builder (Recommended)
+```sql
+-- Create tenant isolation that applies to ALL data models
+CREATE FUNCTION dbo.fn_TenantFilter(@TenantID INT)
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN SELECT 1 AS fn_result
+WHERE @TenantID = CAST(SESSION_CONTEXT(N'TenantID') AS INT);
 
-**Data API Builder** (DAB) auto-generates REST and GraphQL APIs from your database schema. One config file. Zero code.
-
-```bash
-# Install globally
-dotnet tool install -g Microsoft.DataApiBuilder
-
-# Initialize from your database
-dab init --database-type "mssql" --connection-string "..."
-
-# Add your tables
-dab add Users --source "dbo.Users" --permissions "anonymous:read"
-dab add Accounts --source "dbo.Accounts" --permissions "anonymous:read"
-dab add Transactions --source "dbo.Transactions" --permissions "authenticated:*"
-
-# Start the API
-dab start
+-- One policy protects everything
+CREATE SECURITY POLICY TenantIsolation
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.Users,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.Accounts,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.Transactions,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.DeviceFingerprints,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.FraudDecisions,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.FraudPatterns
+WITH (STATE = ON);
 ```
 
-**Result:** Instant REST and GraphQL APIs:
+**Every query—relational, JSON, graph, vector, ledger, or analytical—respects the same security boundary.**
 
-```bash
-# REST
-GET /api/Users?$filter=RiskScore gt 0.7
+---
 
-# GraphQL
-query {
-  users(filter: { riskScore: { gt: 0.7 } }) {
-    name, email, riskScore
+## Ship It: Data API Builder for Instant APIs
+
+Your FraudShield AI needs APIs. For the mobile app. For the dashboard. For AI agents. Data API Builder generates them instantly—including **MCP (Model Context Protocol)** endpoints that let AI assistants query your multimodal data directly:
+
+```json
+{
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('SQL_CONNECTION')"
+  },
+  "entities": {
+    "FraudCheck": {
+      "source": { "type": "stored-procedure", "object": "sp_CheckFraud" },
+      "rest": { "path": "/fraud/check", "methods": ["POST"] },
+      "permissions": [{ "role": "authenticated", "actions": ["execute"] }]
+    },
+    "FraudDecisions": {
+      "source": "dbo.FraudDecisions",
+      "rest": { "path": "/fraud/decisions" },
+      "graphql": { "singular": "decision", "plural": "decisions" },
+      "permissions": [{ "role": "analyst", "actions": ["read"] }]
+    }
   }
 }
 ```
 
-### Option 2: Stored Procedure APIs
-
-Expose your multimodal procedures as API endpoints:
-
 ```bash
-dab add CheckFraud --source "dbo.sp_CheckFraud" --source.type "stored-procedure" --permissions "authenticated:execute"
+# Start the API
+dab start
+
+# Check fraud via REST
+curl -X POST https://api.fraudshield.ai/fraud/check \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"txnId": 10001, "userId": 1, "amount": 5000, ...}'
+
+# Query decisions via GraphQL  
+curl -X POST https://api.fraudshield.ai/graphql \
+  -d '{"query": "{ decisions(filter: {Decision: {eq: \"BLOCKED\"}}) { TxnID RiskScore } }"}'
 ```
-
-Now your fraud check is a single POST:
-
-```bash
-POST /api/CheckFraud
-{
-  "TxnID": 10001,
-  "UserID": 1,
-  "Amount": 5000,
-  "DeviceFingerprint": {...},
-  "TxnEmbedding": [0.1, -0.2, ...]
-}
-```
-
-**The entire multimodal fraud check—relational, JSON, graph, vector, ledger—in one API call.**
 
 ---
 
 ## Talk to Your Data: MCP for AI Agents
 
-Here's where it gets exciting. **Model Context Protocol (MCP)** is a standard for AI agents to interact with data systems. Data API Builder generates MCP endpoints automatically.
+Here's where it gets exciting. **MCP (Model Context Protocol)** is the emerging standard for AI agents to interact with external data sources. Data API Builder exposes your entire FraudShield database as an MCP endpoint.
+
+**What does this mean?** Your AI assistant—whether it's Copilot, Claude, or a custom agent—can directly query your multimodal data using natural language.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                     AI Agent Architecture                        │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│    ┌─────────────────┐         ┌─────────────────┐             │
-│    │   Natural       │         │   AI Model      │             │
-│    │   Language      │────────►│   (GPT-4, etc)  │             │
-│    │   Input         │         │                 │             │
-│    └─────────────────┘         └────────┬────────┘             │
-│                                         │                       │
-│                                         ▼                       │
-│                            ┌─────────────────────┐             │
-│                            │   MCP Endpoint      │             │
-│                            │   (auto-generated   │             │
-│                            │    by DAB)          │             │
-│                            └────────┬────────────┘             │
-│                                     │                           │
-│                                     ▼                           │
-│                         ┌───────────────────────┐              │
-│                         │   SQL Server 2025     │              │
-│                         │   Multimodal Database │              │
-│                         │                       │              │
-│                         │  ┌─────┐ ┌─────────┐ │              │
-│                         │  │JSON │ │ Graph   │ │              │
-│                         │  └─────┘ └─────────┘ │              │
-│                         │  ┌─────┐ ┌─────────┐ │              │
-│                         │  │Vector│ │ Ledger │ │              │
-│                         │  └─────┘ └─────────┘ │              │
-│                         └───────────────────────┘              │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     AI Agent + MCP + FraudShield                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   User: "Show me all blocked transactions from users           │
+│          connected to known fraud rings in the last 24 hours"  │
+│                              │                                  │
+│                              ▼                                  │
+│                    ┌─────────────────┐                         │
+│                    │    AI Agent     │                         │
+│                    │  (Copilot/etc)  │                         │
+│                    └────────┬────────┘                         │
+│                              │ MCP Protocol                     │
+│                              ▼                                  │
+│                    ┌─────────────────┐                         │
+│                    │  Data API       │                         │
+│                    │  Builder (DAB)  │                         │
+│                    └────────┬────────┘                         │
+│                              │                                  │
+│           ┌──────────────────┼──────────────────┐               │
+│           │                  │                  │               │
+│           ▼                  ▼                  ▼               │
+│     [Relational]        [Graph]           [Ledger]             │
+│     blocked txns    fraud network      audit proof             │
+│                                                                 │
+│   Result: Structured data + Graph traversal + Verified audit   │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+### Configure MCP in Data API Builder
+
+```json
+{
+  "runtime": {
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp"
+    }
+  },
+  "entities": {
+    "FraudAnalysis": {
+      "source": "dbo.vw_FraudAnalysis",
+      "mcp": {
+        "description": "Query fraud decisions with risk scores, graph connections, and audit trails",
+        "enabled": true
+      }
+    }
+  }
+}
+```
+
+### Natural Language to Multimodal Queries
 
 With MCP enabled, your AI agent translates natural language into the appropriate multimodal query:
 
