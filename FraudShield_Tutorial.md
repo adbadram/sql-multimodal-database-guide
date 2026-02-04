@@ -500,6 +500,147 @@ END;
 
 ---
 
+## Why This Works: Under the Hood
+
+You might be wondering: *"How can one database be good at everything?"* The secret isn't magic—it's architectural integration that took decades to build.
+
+### One Optimizer to Rule Them All
+
+When you run `sp_CheckFraud`, you're not calling five different engines. **One query optimizer** analyzes the entire procedure and builds a unified execution plan:
+
+```
+Execution Plan (Simplified):
+├── Relational: Index Seek on Transactions (velocity check)
+├── JSON: JSON Index Seek on DeviceFingerprints (VPN detection)  
+├── Graph: Pattern Match on Knows edges (fraud network)
+├── Vector: DiskANN Index Scan on FraudPatterns (similarity)
+└── Ledger: Clustered Insert into FraudDecisions (audit)
+
+All operations: SAME transaction context, SAME optimizer cost model
+```
+
+**The optimizer:**
+- Pushes filters as deep as possible across ALL data models
+- Chooses optimal join order whether it's relational-to-graph or JSON-to-vector
+- Uses appropriate indexes for each model type
+- Applies the SAME cost-based optimization as pure relational queries
+
+> ⚡ **Key Insight:** Cross-model indexing means the optimizer can choose the best access path regardless of data model. A query joining relational tables with JSON documents and graph edges gets the SAME optimization as a pure relational query.
+
+### The Latency Math
+
+In a polyglot architecture, fraud detection requires:
+
+```
+PostgreSQL (users)     → 3ms network hop
+MongoDB (devices)      → 3ms network hop  
+Neo4j (graph)          → 3ms network hop
+Pinecone (vectors)     → 3ms network hop
+Kafka → Snowflake      → 10ms async
+                         ─────────────
+                         22ms+ MINIMUM (just network overhead)
+```
+
+**With multimodal SQL Server:**
+```
+sp_CheckFraud          → 0ms (in-process)
+All five checks        → ~2-5ms total
+                         ─────────────
+                         <5ms TOTAL (compute only, no network)
+```
+
+That's **4-10x faster**—and more importantly, **deterministic latency** with no network variability.
+
+### How Columnstore Enables Real-Time Analytics
+
+Your executive dashboard query (Step 6) runs on the **same** Transactions table that handles OLTP inserts. How?
+
+**Row Store (Traditional OLTP):**
+```
+Read entire row → [TxnID][From][To][Amount][Time][Status]
+                  Process one row at a time
+                  For 10M rows: ~45 seconds
+```
+
+**Columnstore (Analytical):**
+```
+Read only needed columns → [Amount] [Status]
+                          Compressed 10-15x
+                          Batch mode: 900 rows per CPU cycle
+                          For 10M rows: ~200ms
+```
+
+| Metric | Row Store | Columnstore |
+|--------|-----------|-------------|
+| Data read | ~500 MB | ~12 MB |
+| CPU mode | Row-by-row | Batch (900 rows/cycle) |
+| Typical time | 45 sec | 0.2 sec |
+
+**No ETL. No data warehouse sync. Real-time operational analytics.**
+
+### Single Security Boundary
+
+In polyglot land, your security team audits:
+- PostgreSQL RBAC
+- MongoDB roles  
+- Neo4j native auth
+- Pinecone API keys
+- Snowflake RBAC
+
+**Five different attack surfaces. Five compliance audits. Five ways to misconfigure.**
+
+With multimodal SQL Server, ONE security policy protects everything:
+
+```sql
+-- This ONE policy applies to:
+-- ✓ Relational queries
+-- ✓ JSON path expressions
+-- ✓ Graph MATCH patterns  
+-- ✓ Vector similarity searches
+-- ✓ Columnstore analytics
+-- ✓ Ledger history views
+
+CREATE SECURITY POLICY TenantIsolation
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.Users,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.DeviceFingerprints,
+ADD FILTER PREDICATE dbo.fn_TenantFilter(TenantID) ON dbo.FraudPatterns
+WITH (STATE = ON);
+```
+
+### Backup & Recovery: One Command
+
+Polyglot disaster recovery requires coordinating snapshots across 6 systems to achieve consistency. Miss one? Data corruption.
+
+**Multimodal recovery:**
+```sql
+-- Backup ALL data models in one atomic operation
+BACKUP DATABASE FraudShieldDB TO DISK = 'FraudShield_Full.bak';
+
+-- Point-in-time recovery: ALL models restored to exact same moment
+RESTORE DATABASE FraudShieldDB WITH STOPAT = '2026-02-04 10:30:00';
+```
+
+**One command. Perfect consistency. Every data model.**
+
+---
+
+## The Payoff: What We Built
+
+| Capability | Traditional Approach | FraudShield with Multimodal |
+|------------|---------------------|----------------------------|
+| User/Account data | PostgreSQL | ✅ Same database |
+| Device fingerprints | MongoDB | ✅ Same database (JSON) |
+| Fraud network | Neo4j | ✅ Same database (Graph) |
+| Pattern matching | Pinecone | ✅ Same database (Vector) |
+| Audit trail | Hyperledger | ✅ Same database (Ledger) |
+| Analytics | Snowflake | ✅ Same database (Columnstore) |
+| **Total systems** | **6 databases** | **1 database** |
+| **Security audits** | 6 | 1 |
+| **Consistency model** | Eventually consistent | ACID everywhere |
+| **Latency** | 50-100ms (network hops) | <5ms |
+
+---
+
 ## Ship It: From Database to Production API
 
 You've built FraudShield's multimodal schema. Now let's expose it to the world.
