@@ -223,7 +223,7 @@ The answer lies in the **query optimizer** and **storage layer**:
 
 1. **Unified Optimizer**: All data models go through the same cost-based optimizer. It doesn't matter if you're traversing a graph or searching vectors - the engine chooses the best execution plan.
 
-2. **Appropriate Storage**: Columnstore indexes use columnar storage for analytics. Rowstore uses row-based storage for OLTP. Vector indexes use HNSW. The right storage for each workload.
+2. **Appropriate Storage**: Columnstore indexes use columnar storage for analytics. Rowstore uses row-based storage for OLTP. Vector indexes use DiskANN. The right storage for each workload.
 
 3. **Single Transaction Manager**: ACID guarantees across all data models. Update a JSON document, traverse a graph, and log to ledger - all atomically.
 
