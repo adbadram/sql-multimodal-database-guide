@@ -277,9 +277,9 @@ Ready to see this in action?
 
 Copy and paste this prompt into ChatGPT, Claude, Copilot, or any AI assistant to get started immediately:
 
-> *"I want to build a fraud detection system using SQL Server 2025's multimodal capabilities. Show me how to create tables that combine relational data, JSON device metadata, graph relationships for fraud networks, and vector embeddings for pattern matching, all in one database. Include a stored procedure that checks all these data models in a single transaction."*
+> *"Help me get started with SQL Server 2025's multimodal database capabilities for free. Walk me through downloading SQL Server 2025 Developer Edition or setting up an Azure SQL Database free tier. Then show me how to create my first tables using native JSON, graph nodes and edges, and vector embeddings so I can experience all these data models working together in one database."*
 
-Your AI assistant will help you generate the complete schema and get hands-on with multimodal databases in minutes.
+Your AI assistant will walk you through the setup process and have you running multimodal queries in minutes.
 
 ---
 
